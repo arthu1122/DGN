@@ -59,52 +59,7 @@ class TestbedDataset(InMemoryDataset):
     # XD - list of SMILES, XT: list of encoded target (categorical or one-hot),
     # Y: list of labels (i.e. affinity)
     # Return: PyTorch-Geometric format processed data
-    def process(self, xd, xt, xt_featrue, y, smile_graph):
-        assert (len(xd) == len(xt) and len(xt) == len(y)), "The three lists must be the same length!"
-        data_list = []
-        data_len = len(xd)
-        #print('number of data', data_len)
-        for i in range(data_len):
-            # print('Converting SMILES to graph: {}/{}'.format(i+1, data_len))
-            smiles = xd[i]
-            target = xt[i]
-            labels = y[i]
-            # convert SMILES to molecular representation using rdkit
-            c_size, features, edge_index = smile_graph[smiles]
-            #print('c_size:',c_size)
-            #print('features:',features)
-            #print('edge_index:',edge_index)
-            # make the graph ready for PyTorch Geometrics GCN algorithms:
-            GCNData = DATA.Data(x=torch.Tensor(features),
-                                edge_index=torch.LongTensor(edge_index).transpose(1, 0),
-                                y=torch.Tensor([labels]))
-            cell = self.get_cell_feature(target, xt_featrue)
-            #print('cell:',cell)
-            if cell == False : # 如果读取cell失败则中断程序
-                print('cell', cell)
-                sys.exit()
 
-            new_cell = []
-            #print('cell_feature', cell_feature)
-            for n in cell:
-                new_cell.append(float(n))
-            #print('new_cell:',new_cell)
-            GCNData.cell = torch.FloatTensor([new_cell])
-            GCNData.__setitem__('c_size', torch.LongTensor([c_size]))
-            # append graph, label and target sequence to data list
-            data_list.append(GCNData)
-
-        if self.pre_filter is not None:
-            data_list = [data for data in data_list if self.pre_filter(data)]
-
-        if self.pre_transform is not None:
-            data_list = [self.pre_transform(data) for data in data_list]
-        print('Graph construction done. Saving to file.')
-        data, slices = self.collate(data_list)
-        print('data:',data)
-        print('slices:',slices)
-        # save preprocessed data:
-        torch.save((data, slices), self.processed_paths[0])
 
 def rmse(y,f):
     rmse = sqrt(((y - f)**2).mean(axis=0))
