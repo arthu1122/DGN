@@ -21,7 +21,7 @@ pip install pandas
 
 ## Step 2 Training:
 ```shell
-python training.py > train.log
+python training.py -u > train.log
 
 # or
 # nohup sh  ./train.sh > ./sh.log 2>&1 &
