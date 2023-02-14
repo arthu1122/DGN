@@ -81,8 +81,8 @@ class GNNDataset(Dataset):
     def __init__(self, label_df, vocab_file, features_cell_df):
         super(GNNDataset, self).__init__()
 
-        # TODO test
-        label_df = label_df[:100]
+        # # TODO test
+        # label_df = label_df[:100]
 
         self.data = label_df[['Cell_Line_Name', 'DrugID1', 'DrugID2']]
         self.label = list(label_df['Label'])
