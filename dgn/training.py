@@ -55,6 +55,7 @@ def predicting(model, device, loader_test,graph_data):
             cell_features = cell_features.to(device)
             labels = labels.to(device)
 
+
             output = model(drug1_ids, drug2_ids, cell_features, graph_data)
             ys = F.softmax(output, 1).to('cpu').data.numpy()
             predicted_labels = list(map(lambda x: np.argmax(x), ys))
@@ -118,7 +119,8 @@ graph_data = get_graph_data(features_drug_file=features_drug_file,
                             e_dd_index_file=e_dd_index_file,
                             e_dt_index_file=e_dt_index_file,
                             e_tt_index_file=e_tt_index_file,
-                            e_dd_att_file=e_dd_att_file)
+                            e_dd_att_file=e_dd_att_file,
+                            device=device)
 
 lenth = len(label_df)
 pot = int(lenth / 5)

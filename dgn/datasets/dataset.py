@@ -10,7 +10,14 @@ import re
 
 
 # graph data creating
-def create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_edge_index, dd_edge_att):
+def create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_edge_index, dd_edge_att, device):
+    drug_feature = drug_feature.to(device)
+    target_feature = target_feature.to(device)
+    dd_edge_index = dd_edge_index.to(device)
+    dt_edge_index = dt_edge_index.to(device)
+    tt_edge_index = tt_edge_index.to(device)
+    dd_edge_att = dd_edge_att.to(device)
+
     data = HeteroData()
 
     data['drug'].x = drug_feature  # [num_drugs, num_features_drug]
@@ -22,9 +29,9 @@ def create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_e
     data['target', 't-t', 'target'].edge_index = tt_edge_index
 
     data['drug', 'd-d', 'drug'].edge_attr = torch.unsqueeze(dd_edge_att, -1)  # [num_edges_d-d, num_features_d-d]
-    data['drug', 'd-t', 'target'].edge_attr = torch.ones([dt_edge_index.shape[-1], 1])
+    data['drug', 'd-t', 'target'].edge_attr = torch.ones([dt_edge_index.shape[-1], 1], device=device)
     # data['target', 't-d', 'drug'].edge_attr = torch.ones([dt_edge_index.shape[-1],1])
-    data['target', 't-t', 'target'].edge_attr = torch.ones([tt_edge_index.shape[-1], 1])
+    data['target', 't-t', 'target'].edge_attr = torch.ones([tt_edge_index.shape[-1], 1], device=device)
 
     data = T.ToUndirected()(data)
 
@@ -41,7 +48,7 @@ def get_id(id_dict, ID, is_drug=True):
 
 
 def get_graph_data(features_drug_file, features_target_file, e_dd_index_file, e_dt_index_file, e_tt_index_file,
-                   e_dd_att_file):
+                   e_dd_att_file,device):
     features_drug = pd.read_csv(features_drug_file, index_col='DrugID', dtype=str)
     features_target = pd.read_csv(features_target_file, index_col='TargetID', dtype=str)
 
@@ -72,7 +79,7 @@ def get_graph_data(features_drug_file, features_target_file, e_dd_index_file, e_
 
     dd_edge_att = torch.FloatTensor([float(att[:-1]) for att in edge_drug_drug_att])
 
-    graph_data = create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_edge_index, dd_edge_att)
+    graph_data = create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_edge_index, dd_edge_att,device)
 
     return graph_data
 
