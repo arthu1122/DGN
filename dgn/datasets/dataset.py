@@ -10,6 +10,7 @@ import re
 
 
 # graph data creating
+# Heterogeneous graph
 def create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_edge_index, dd_edge_att, device):
     drug_feature = drug_feature.to(device)
     target_feature = target_feature.to(device)
@@ -25,7 +26,6 @@ def create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_e
 
     data['drug', 'd-d', 'drug'].edge_index = dd_edge_index  # [2, num_edges_d-d]
     data['drug', 'd-t', 'target'].edge_index = dt_edge_index
-    # data['target', 't-d', 'drug'].edge_index = dt_edge_index[::-1]
     data['target', 't-t', 'target'].edge_index = tt_edge_index
 
     data['drug', 'd-d', 'drug'].edge_attr = torch.unsqueeze(dd_edge_att, -1)  # [num_edges_d-d, num_features_d-d]
@@ -33,17 +33,18 @@ def create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_e
     # data['target', 't-d', 'drug'].edge_attr = torch.ones([dt_edge_index.shape[-1],1])
     data['target', 't-t', 'target'].edge_attr = torch.ones([tt_edge_index.shape[-1], 1], device=device)
 
+    # undirect edge
     data = T.ToUndirected()(data)
 
     return data
 
 
+# get encoded id
 def get_id(id_dict, ID, is_drug=True):
     if is_drug:
         key = "Drug|||"
     else:
         key = "Target|||"
-
     return id_dict[key + str(ID)]
 
 
@@ -86,6 +87,7 @@ def get_graph_data(features_drug_file, features_target_file, e_dd_index_file, e_
 
 class GNNDataset(Dataset):
     def __init__(self, label_df, vocab_file, features_cell_df):
+        # vocab: drug_vocab
         super(GNNDataset, self).__init__()
 
         # # TODO test
@@ -94,7 +96,6 @@ class GNNDataset(Dataset):
         self.data = label_df[['Cell_Line_Name', 'DrugID1', 'DrugID2']]
         self.label = list(label_df['Label'])
 
-        # self.features_cell = pd.read_csv(features_cell_file, index_col='Cell_Line_Name', dtype=str)
         self.features_cell = features_cell_df
         self.features_cell.index = self.features_cell.index.str.lower()
 
@@ -107,6 +108,7 @@ class GNNDataset(Dataset):
     def __getitem__(self, index):
         index_data = self.data.iloc[index]
         cell_name, drug1, drug2 = index_data['Cell_Line_Name'], index_data['DrugID1'], index_data['DrugID2']
+
         drug1_id = get_id(self.id_dict, drug1)
         drug2_id = get_id(self.id_dict, drug2)
 
@@ -124,22 +126,3 @@ class GNNDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
-
-if __name__ == '__main__':
-    dataset = GNNDataset(label_file="../../data/processed/Shuffled_Label_Data.csv",
-                         features_drug_file="../../data/raw/Feature_DRUG.csv",
-                         features_target_file="../../data/raw/Feature_TAR.csv",
-                         features_cell_file="../../data/raw/Feature_CELL.csv",
-                         vocab_file="../../data/processed/drug_vocab.txt",
-                         e_dd_index_file="../../data/processed/drug_drug_edge_index.txt",
-                         e_dd_att_file="../../data/processed/drug_drug_edge_att.txt",
-                         e_dt_index_file="../../data/processed/drug_tar_edge_index.txt",
-                         e_tt_index_file="../../data/processed/tar_tar_edge_index.txt"
-                         )
-    data = dataset.get_graph_data()
-
-    for d in dataset:
-        print(d)
-        print(1)
-
-    print(0)

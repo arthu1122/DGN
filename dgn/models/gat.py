@@ -9,6 +9,7 @@ class HeteroGNN(torch.nn.Module):
     def __init__(self, num_features_cell=890, hidden_channels=768, num_layers=1, dropout=0.2):
         super().__init__()
 
+        # graph network
         self.convs = torch.nn.ModuleList()
         for _ in range(num_layers):
             conv = HeteroConv({
@@ -30,7 +31,7 @@ class HeteroGNN(torch.nn.Module):
             nn.ReLU()
         )
 
-        # final output
+        # final transform
         self.reduction2 = nn.Sequential(
             nn.Linear(hidden_channels*4, 2048),
             nn.ReLU(),
@@ -42,9 +43,9 @@ class HeteroGNN(torch.nn.Module):
             nn.ReLU()
         )
 
+        # output layer
         self.classfier = nn.Linear(hidden_channels, 2)
 
-        # self.lin = Linear(hidden_channels, out_channels)
 
     def forward(self, drug1_id, drug2_id, cell_features, graph_data):
 
@@ -54,11 +55,13 @@ class HeteroGNN(torch.nn.Module):
             x_dict = conv(x_dict, edge_index_dict)
             x_dict = {key: x.relu() for key, x in x_dict.items()}
 
+        # get drugs hidden_state
         drug1 = x_dict['drug'][drug1_id]
         drug2 = x_dict['drug'][drug2_id]
-
+        # get cell hidden_state
         cell_features = F.normalize(cell_features, 2, 1)
         cell = self.reduction(cell_features)
+
 
         hidden = torch.cat((drug1, drug2, cell), 1)
         hidden = F.normalize(hidden, 2, 1)

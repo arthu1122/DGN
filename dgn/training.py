@@ -68,6 +68,7 @@ def predicting(model, device, loader_test,graph_data):
     return total_labels.numpy().flatten(), total_preds.numpy().flatten(), total_prelabels.numpy().flatten()
 
 
+# get batch
 def batch_collate(batch):
     drug1_ids = []
     drug2_ids = []
