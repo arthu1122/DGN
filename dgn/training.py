@@ -1,3 +1,4 @@
+import datetime
 import random
 
 import pandas as pd
@@ -35,7 +36,8 @@ def train(model, device, loader_train, optimizer, epoch, graph_data):
         loss.backward()
         optimizer.step()
         if batch_idx % LOG_INTERVAL == 0:
-            print('Train epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(epoch,
+            print('{} Train epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                                                              epoch,
                                                                            batch_idx * len(drug1_ids),
                                                                            len(loader_train.dataset),
                                                                            100. * batch_idx / len(loader_train),
@@ -92,7 +94,7 @@ NUM_EPOCHS = 200
 
 print('Learning rate: ', LR)
 print('Epochs: ', NUM_EPOCHS)
-datafile = 'new_labels_0_10'
+
 
 # CPU or GPU
 if torch.cuda.is_available():
@@ -149,9 +151,9 @@ for i in range(5):
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=LR)
 
-    model_file_name = '../data/result/GATNet(DrugA_DrugB)' + str(i) + '--model_' + datafile + '.model'
-    result_file_name = '../data/result/GATNet(DrugA_DrugB)' + str(i) + '--result_' + datafile + '.csv'
-    file_AUCs = '../data/result/GATNet(DrugA_DrugB)' + str(i) + '--AUCs--' + datafile + '.txt'
+    model_file_name = '../data/result/GATNet(DrugA_DrugB)' + str(i) + '--model.model'
+    result_file_name = '../data/result/GATNet(DrugA_DrugB)' + str(i) + '--result.csv'
+    file_AUCs = '../data/result/GATNet(DrugA_DrugB)' + str(i) + '--AUCs.txt'
     AUCs = ('Epoch\tAUC_dev\tPR_AUC\tACC\tBACC\tPREC\tTPR\tKAPPA\tRECALL')
     with open(file_AUCs, 'w') as f:
         f.write(AUCs + '\n')
@@ -185,7 +187,7 @@ for i in range(5):
             with open(file_AUCs, 'a') as f:
                 f.write('\t'.join(map(str, AUCs)) + '\n')
 
-            # torch.save(model.state_dict(), model_file_name)
+            torch.save(model.state_dict(), model_file_name)
             # independent_num = []
             # independent_num.append(test_num)
             # independent_num.append(T)
