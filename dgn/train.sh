@@ -1,1 +1,1 @@
-python training.py > train.log
+python -u training.py > train.log
