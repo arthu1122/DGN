@@ -86,8 +86,8 @@ def batch_collate(batch):
 
 modeling = HeteroGNN
 
-TRAIN_BATCH_SIZE = 8
-TEST_BATCH_SIZE = 8
+TRAIN_BATCH_SIZE = 128
+TEST_BATCH_SIZE = 128
 LR = 0.0005
 LOG_INTERVAL = 20
 NUM_EPOCHS = 200
