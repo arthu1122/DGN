@@ -1,71 +1,124 @@
+import argparse
 import datetime
 import random
 
-import pandas as pd
-import torch.nn.functional as F
 import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
-
-from models.gat import HeteroGNN
-from datasets.dataset import GNNDataset, get_graph_data
-
-from sklearn.metrics import roc_curve, confusion_matrix
+import torch.nn.functional as F
+from sklearn import metrics
 from sklearn.metrics import cohen_kappa_score, accuracy_score, roc_auc_score, precision_score, recall_score, \
     balanced_accuracy_score
-from sklearn import metrics
+from sklearn.metrics import confusion_matrix
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
+from datasets.dataset import GNNDataset, get_graph_data
+from models.gat import HeteroGNN
+
+Default_Hparams = {
+    "train_batch_size": 2,
+    "test_batch_size": 2,
+    "lr": 1e-4,
+    "epoch": 200,
+    "device": 0,
+    "log_step": 20,
+    "data": "../data/processed/Shuffled_Label_Data.csv",
+    "f_drug": "../data/raw/Feature_DRUG.csv",
+    "f_target": "../data/raw/Feature_TAR.csv",
+    "f_cell": "../data/raw/Feature_CELL.csv",
+    "dd_edge": "../data/processed/drug_drug_edge_index.txt",
+    "dt_edge": "../data/processed/drug_tar_edge_index.txt",
+    "tt_edge": "../data/processed/tar_tar_edge_index.txt",
+    "dd_att": "../data/processed/drug_drug_edge_att.txt",
+    "drug_vocab": "../data/processed/drug_vocab.txt",
+    "output": '../data/result/',
+}
 
 
-# training function at each epoch
-def train(model, device, loader_train, optimizer, epoch, graph_data):
-    print('Training on {} samples...'.format(len(loader_train.dataset)))
-    model.train()
-    # train_loader = np.array(train_loader)
-    for batch_idx, data in enumerate(loader_train):
-        drug1_ids, drug2_ids, cell_features, labels = data
+def get_hparams(args):
+    parser = argparse.ArgumentParser(
+        description="Train a neural machine translation model.",
+        usage="trainer.py [<args>] [-h | --help]"
+    )
 
-        cell_features = cell_features.to(device)
-        labels = labels.to(device)
-        # y = data[0].y.view(-1, 1).long().to(device)
-        # y = y.squeeze(1)
-        optimizer.zero_grad()
-        output = model(drug1_ids, drug2_ids, cell_features, graph_data)
-        loss = loss_fn(output, labels)
-        # print('loss', loss)
-        loss.backward()
-        optimizer.step()
-        if batch_idx % LOG_INTERVAL == 0:
-            print('{} Train epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                                                                              epoch,
-                                                                           batch_idx * len(drug1_ids),
-                                                                           len(loader_train.dataset),
-                                                                           100. * batch_idx / len(loader_train),
-                                                                           loss.item()))
+    parser.add_argument("--batch_size", type=int, help=" batch_size")
+    parser.add_argument("--lr", type=float, help="Path to pre-trained checkpoint.")
+    parser.add_argument("--epoch", type=int, help="epoch for train")
+    parser.add_argument("--device", type=int, help="device")
+    parser.add_argument("--log_step", type=int, help="when to print log")
+    parser.add_argument("--data", type=str, help="training data with labels(.csv)")
+    parser.add_argument("--f_drug", type=str, help="drug features file(.csv)")
+    parser.add_argument("--f_target", type=str, help="target features file(.csv)")
+    parser.add_argument("--f_cell", type=str, help="cell features file(.csv)")
+    parser.add_argument("--dd_edge", type=str, help="drug-drug edge index file(.txt)")
+    parser.add_argument("--dt_edge", type=str, help="drug-target edge index file(.txt)")
+    parser.add_argument("--tt_edge", type=str, help="target-target edge index file(.txt)")
+    parser.add_argument("--dd_att", type=str, help="drug-drug edge attribute file(.txt)")
+    parser.add_argument("--drug_vocab", type=str, help="drug encoded file(.txt)")
+    parser.add_argument("--output", type=str, help="output file fold")
+
+    parsed_args = parser.parse_args(args)
+    params = Default_Hparams
+
+    # override
+    arg_dict = vars(parsed_args)
+    for key, item in arg_dict.items():
+        if key in Default_Hparams.keys() and item:
+            params[key] = item
+
+    return params
 
 
-def predicting(model, device, loader_test,graph_data):
+def predict(model, device, loader_test, graph_data):
+    model.to(device)
     model.eval()
-    total_preds = torch.Tensor()
-    total_labels = torch.Tensor()
-    total_prelabels = torch.Tensor()
-    print('Make prediction for {} samples...'.format(len(loader_test.dataset)))
-    with torch.no_grad():
-        for data in loader_test:
-            drug1_ids, drug2_ids, cell_features, labels = data
 
+    with torch.no_grad():
+        total_preds = torch.Tensor()
+        total_labels = torch.Tensor()
+        total_prelabels = torch.Tensor()
+        print('Make prediction for {} samples...'.format(len(loader_test.dataset)))
+
+        for step, data in tqdm(enumerate(loader_test), desc='Dev Itreation:'):
+            print("Dev Step[{}/{}]".format(step + 1, len(loader_test)))
+
+            drug1_ids, drug2_ids, cell_features, labels = data
             cell_features = cell_features.to(device)
             labels = labels.to(device)
-
-
             output = model(drug1_ids, drug2_ids, cell_features, graph_data)
+
             ys = F.softmax(output, 1).to('cpu').data.numpy()
             predicted_labels = list(map(lambda x: np.argmax(x), ys))
             predicted_scores = list(map(lambda x: x[1], ys))
             total_preds = torch.cat((total_preds, torch.Tensor(predicted_scores)), 0)
             total_prelabels = torch.cat((total_prelabels, torch.Tensor(predicted_labels)), 0)
             total_labels = torch.cat((total_labels, labels.cpu()), 0)
+
     return total_labels.numpy().flatten(), total_preds.numpy().flatten(), total_prelabels.numpy().flatten()
+
+
+def train(device, graph_data, loader_train, loss_fn, model, optimizer, log_step, epoch, epochs):
+    model.to(device)
+    model.train()
+    for batch_idx, data in enumerate(loader_train):
+        drug1_ids, drug2_ids, cell_features, labels = data
+
+        cell_features = cell_features.to(device)
+        labels = labels.to(device)
+        optimizer.zero_grad()
+        output = model(drug1_ids, drug2_ids, cell_features, graph_data)
+        loss = loss_fn(output, labels)
+
+        loss.backward()
+        optimizer.step()
+        if batch_idx % log_step == 0:
+            print("[Train] {} Epoch[{}/{}],step[{}/{}],loss={:.6f}".format(
+                datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, epochs,
+                                                                       batch_idx + 1, len(loader_train),
+                loss.item()))
 
 
 # get batch
@@ -77,7 +130,7 @@ def batch_collate(batch):
     for sample in batch:
         drug1_ids.append(sample[0])
         drug2_ids.append(sample[1])
-        cell_features.append(torch.unsqueeze(sample[2],0))
+        cell_features.append(torch.unsqueeze(sample[2], 0))
         labels.append(sample[3])
 
     cell_features = torch.concat(cell_features)
@@ -85,116 +138,104 @@ def batch_collate(batch):
     return drug1_ids, drug2_ids, cell_features, labels
 
 
-modeling = HeteroGNN
+def main(args=None):
+    hparams = get_hparams(args)
 
-TRAIN_BATCH_SIZE = 128
-TEST_BATCH_SIZE = 128
-LR = 0.0005
-LOG_INTERVAL = 20
-NUM_EPOCHS = 200
+    # CPU or GPU
+    if torch.cuda.is_available():
+        device_index = 'cuda:' + str(hparams['device'])
+        device = torch.device(device_index)
+        print('The code uses GPU...')
+    else:
+        device = torch.device('cpu')
+        print('The code uses CPU!!!')
 
-print('Learning rate: ', LR)
-print('Epochs: ', NUM_EPOCHS)
+    model = HeteroGNN()
+    model = model.to(device)
+    print(model)
 
-
-# CPU or GPU
-if torch.cuda.is_available():
-    device = torch.device('cuda')
-    print('The code uses GPU...')
-else:
-    device = torch.device('cpu')
-    print('The code uses CPU!!!')
-
-label_file = "../data/processed/Shuffled_Label_Data.csv"
-features_drug_file = "../data/raw/Feature_DRUG.csv"
-features_target_file = "../data/raw/Feature_TAR.csv"
-features_cell_file = "../data/raw/Feature_CELL.csv"
-e_dd_index_file = "../data/processed/drug_drug_edge_index.txt"
-e_dt_index_file = "../data/processed/drug_tar_edge_index.txt"
-e_tt_index_file = "../data/processed/tar_tar_edge_index.txt"
-e_dd_att_file = "../data/processed/drug_drug_edge_att.txt"
-
-label_df = pd.read_csv(label_file)
-features_cell = pd.read_csv(features_cell_file, index_col='Cell_Line_Name', dtype=str)
-
-graph_data = get_graph_data(features_drug_file=features_drug_file,
-                            features_target_file=features_target_file,
-                            e_dd_index_file=e_dd_index_file,
-                            e_dt_index_file=e_dt_index_file,
-                            e_tt_index_file=e_tt_index_file,
-                            e_dd_att_file=e_dd_att_file,
-                            device=device)
-
-lenth = len(label_df)
-pot = int(lenth / 5)
-print('lenth', lenth)
-print('pot', pot)
-
-random_num = random.sample(range(0, lenth), lenth)
-
-for i in range(5):
-    test_num = random_num[pot * i:pot * (i + 1)]
-    train_num = random_num[:pot * i] + random_num[pot * (i + 1):]
-
-    data_train = GNNDataset(label_df=label_df.iloc[train_num],
-                            vocab_file="../data/processed/drug_vocab.txt",
-                            features_cell_df=features_cell,
-                            )
-    data_test = GNNDataset(label_df=label_df.iloc[test_num],
-                           vocab_file="../data/processed/drug_vocab.txt",
-                           features_cell_df=features_cell,
-                           )
-
-    loader_train = DataLoader(data_train, batch_size=TRAIN_BATCH_SIZE, shuffle=None, collate_fn=batch_collate)
-    loader_test = DataLoader(data_test, batch_size=TEST_BATCH_SIZE, shuffle=None, collate_fn=batch_collate)
-
-    model = modeling().to(device)
     loss_fn = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+    optimizer = torch.optim.Adam(model.parameters(), lr=hparams['lr'])
+    # 学习率调整器，检测准确率的状态，然后衰减学习率
+    scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, min_lr=1e-7, patience=5, verbose=True,
+                                  threshold=0.0001, eps=1e-08)
 
-    model_file_name = '../data/result/GATNet(DrugA_DrugB)' + str(i) + '--model.model'
-    result_file_name = '../data/result/GATNet(DrugA_DrugB)' + str(i) + '--result.csv'
-    file_AUCs = '../data/result/GATNet(DrugA_DrugB)' + str(i) + '--AUCs.txt'
-    AUCs = ('Epoch\tAUC_dev\tPR_AUC\tACC\tBACC\tPREC\tTPR\tKAPPA\tRECALL')
-    with open(file_AUCs, 'w') as f:
-        f.write(AUCs + '\n')
+    data_df = pd.read_csv(hparams['data'])
+    features_cell = pd.read_csv(hparams['f_cell'], index_col='Cell_Line_Name', dtype=str)
+    graph_data = get_graph_data(features_drug_file=hparams['f_drug'],
+                                features_target_file=hparams["f_target"],
+                                e_dd_index_file=hparams["dd_edge"],
+                                e_dt_index_file=hparams["dt_edge"],
+                                e_tt_index_file=hparams["tt_edge"],
+                                e_dd_att_file=hparams["dd_att"],
+                                device=device)
 
-    best_auc = 0
-    for epoch in range(NUM_EPOCHS):
-        train(model, device, loader_train, optimizer, epoch + 1,graph_data)
-        T, S, Y = predicting(model, device, loader_test,graph_data)
+    lenth = len(data_df)
+    pot = int(lenth / 5)
+    print('lenth', lenth)
+    print('pot', pot)
+    random_num = random.sample(range(0, lenth), lenth)
 
-        # T is correct label
-        # S is predict score
-        # Y is predict label
+    for i in range(5):
+        test_num = random_num[pot * i:pot * (i + 1)]
+        train_num = random_num[:pot * i] + random_num[pot * (i + 1):]
 
-        # compute preformence
-        AUC = roc_auc_score(T, S)
-        precision, recall, threshold = metrics.precision_recall_curve(T, S)
-        PR_AUC = metrics.auc(recall, precision)
-        BACC = balanced_accuracy_score(T, Y)
-        tn, fp, fn, tp = confusion_matrix(T, Y).ravel()
-        TPR = tp / (tp + fn)
-        PREC = precision_score(T, Y)
-        ACC = accuracy_score(T, Y)
-        KAPPA = cohen_kappa_score(T, Y)
-        recall = recall_score(T, Y)
+        data_train = GNNDataset(label_df=data_df.iloc[train_num],
+                                vocab_file=hparams['drug_vocab'],
+                                features_cell_df=features_cell)
+        data_test = GNNDataset(label_df=data_df.iloc[test_num],
+                               vocab_file=hparams['drug_vocab'],
+                               features_cell_df=features_cell)
 
-        # save data
-        if best_auc < AUC:
-            best_auc = AUC
-            AUCs = [epoch, AUC, PR_AUC, ACC, BACC, PREC, TPR, KAPPA, recall]
+        loader_train = DataLoader(data_train, batch_size=hparams['train_batch_size'], shuffle=None,
+                                  collate_fn=batch_collate)
+        loader_test = DataLoader(data_test, batch_size=hparams['test_batch_size'], shuffle=None,
+                                 collate_fn=batch_collate)
 
-            with open(file_AUCs, 'a') as f:
-                f.write('\t'.join(map(str, AUCs)) + '\n')
+        model_file_name = hparams['output'] + "GATNet(DrugA_DrugB)" + str(i) + '--model.model'
+        file_AUCs = hparams['output'] + "GATNet(DrugA_DrugB)" + str(i) + '--AUCs.txt'
+        AUCs = 'Epoch\tAUC_dev\tPR_AUC\tACC\tBACC\tPREC\tTPR\tKAPPA\tRECALL'
+        with open(file_AUCs, 'w') as f:
+            f.write(AUCs + '\n')
 
-            torch.save(model.state_dict(), model_file_name)
-            # independent_num = []
-            # independent_num.append(test_num)
-            # independent_num.append(T)
-            # independent_num.append(Y)
-            # independent_num.append(S)
-            # txtDF = pd.DataFrame(data=independent_num)
-            # txtDF.to_csv(result_file_name, index=False, header=False)
+        best_auc = 0
+        epochs = hparams['epoch']
 
-        print('best_auc', best_auc)
+        print('Training begin!')
+        for epoch in range(epochs):
+            train(device, graph_data, loader_train, loss_fn, model, optimizer, hparams['log_step'], epoch, epochs)
+
+            # T is correct label
+            # S is predict score
+            # Y is predict label
+            T, S, Y = predict(model, device, loader_test, graph_data)
+
+            # compute preformence
+            AUC = roc_auc_score(T, S)
+            precision, recall, threshold = metrics.precision_recall_curve(T, S)
+            PR_AUC = metrics.auc(recall, precision)
+            BACC = balanced_accuracy_score(T, Y)
+            tn, fp, fn, tp = confusion_matrix(T, Y).ravel()
+            TPR = tp / (tp + fn)
+            PREC = precision_score(T, Y)
+            ACC = accuracy_score(T, Y)
+            KAPPA = cohen_kappa_score(T, Y)
+            recall = recall_score(T, Y)
+
+            # save data
+            if best_auc < AUC:
+                best_auc = AUC
+                AUCs = [epoch, AUC, PR_AUC, ACC, BACC, PREC, TPR, KAPPA, recall]
+
+                with open(file_AUCs, 'a') as f:
+                    f.write('\t'.join(map(str, AUCs)) + '\n')
+
+                torch.save(model.state_dict(), model_file_name)
+
+            print('best_auc', best_auc)
+
+        scheduler.step(best_auc)
+
+
+if __name__ == '__main__':
+    main()

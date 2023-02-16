@@ -15,6 +15,7 @@ class HeteroGNN(torch.nn.Module):
             conv = HeteroConv({
                 ('drug', 'd-d', 'drug'): GATConv((-1, -1), hidden_channels),
                 ('drug', 'd-t', 'target'): GATConv((-1, -1), hidden_channels,add_self_loops=False),
+                ('target','rev_d-t','drug'):GATConv((-1, -1), hidden_channels,add_self_loops=False),
                 ('target', 't-t', 'target'): GATConv((-1, -1), hidden_channels,),
             }, aggr='sum')
             self.convs.append(conv)
