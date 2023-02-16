@@ -19,9 +19,9 @@ from datasets.dataset import GNNDataset, get_graph_data
 from models.gat import HeteroGNN
 
 Default_Hparams = {
-    "train_batch_size": 2,
-    "test_batch_size": 2,
-    "lr": 1e-4,
+    "train_batch_size": 128,
+    "test_batch_size": 128,
+    "lr": 1e-5,
     "epoch": 200,
     "device": 0,
     "log_step": 20,
