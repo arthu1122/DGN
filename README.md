@@ -38,5 +38,8 @@ python -u training.py  > train.log
 3. 模型添加反向边的网络  √
 4. 指标最后几个为0？ 
 5. 单机多卡 
+6. MAE 两个可学习的mask矩阵替代mask的节点 拉进两次输出的mask节点的表示
+7. 找baseline 收集数据集
+
 
 
