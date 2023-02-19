@@ -150,15 +150,12 @@ def main(args=None):
         device = torch.device('cpu')
         print('The code uses CPU!!!')
 
-    model = HeteroGNN()
-    model = model.to(device)
-    print(model)
+    modeling = HeteroGNN()
 
-    loss_fn = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=hparams['lr'])
-    # 学习率调整器，检测准确率的状态，然后衰减学习率
-    scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, min_lr=1e-7, patience=5, verbose=True,
-                                  threshold=0.0001, eps=1e-08)
+    print(modeling)
+
+
+
 
     data_df = pd.read_csv(hparams['data'])
     features_cell = pd.read_csv(hparams['f_cell'], index_col='Cell_Line_Name', dtype=str)
@@ -177,6 +174,14 @@ def main(args=None):
     random_num = random.sample(range(0, lenth), lenth)
 
     for i in range(5):
+
+        model = modeling.to(device)
+        loss_fn = nn.CrossEntropyLoss()
+        optimizer = torch.optim.Adam(model.parameters(), lr=hparams['lr'])
+        # 学习率调整器，检测准确率的状态，然后衰减学习率
+        scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, min_lr=1e-7, patience=5, verbose=True,
+                                  threshold=0.0001, eps=1e-08)
+
         test_num = random_num[pot * i:pot * (i + 1)]
         train_num = random_num[:pot * i] + random_num[pot * (i + 1):]
 
