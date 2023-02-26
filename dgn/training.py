@@ -88,7 +88,7 @@ def predict(model, device, loader_test, graph_data):
             drug1_ids, drug2_ids, cell_features, labels = data
             cell_features = cell_features.to(device)
             labels = labels.to(device)
-            output = model(drug1_ids, drug2_ids, cell_features, graph_data)
+            output,_ = model(drug1_ids, drug2_ids, cell_features, graph_data)
 
             ys = F.softmax(output, 1).to('cpu').data.numpy()
             predicted_labels = list(map(lambda x: np.argmax(x), ys))
@@ -109,8 +109,11 @@ def train(device, graph_data, loader_train, loss_fn, model, optimizer, log_step,
         cell_features = cell_features.to(device)
         labels = labels.to(device)
         optimizer.zero_grad()
-        output = model(drug1_ids, drug2_ids, cell_features, graph_data)
+        output,loss_mae = model(drug1_ids, drug2_ids, cell_features, graph_data)
         loss = loss_fn(output, labels)
+
+
+        loss=loss+loss_mae
 
         loss.backward()
         optimizer.step()
