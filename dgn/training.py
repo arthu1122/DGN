@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from datasets.dataset import GNNDataset, get_graph_data
-from models.gat import HeteroGNN
+from models.gat import UnnamedModel
 
 Default_Hparams = {
     "train_batch_size": 128,
@@ -153,7 +153,7 @@ def main(args=None):
         device = torch.device('cpu')
         print('The code uses CPU!!!')
 
-    modeling = HeteroGNN()
+    modeling = UnnamedModel()
 
     print(modeling)
 
