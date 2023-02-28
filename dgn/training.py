@@ -16,6 +16,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from datasets.dataset import GNNDataset, get_graph_data
+from dgn.utils.ema import initializes_target_network, update_target_network_parameters
+from dgn.utils.mae import get_mask_x_dict, get_mae_loss
 from models.gat import UnnamedModel
 
 Default_Hparams = {
@@ -88,7 +90,11 @@ def predict(model, device, loader_test, graph_data, mae=True):
             drug1_ids, drug2_ids, cell_features, labels = data
             cell_features = cell_features.to(device)
             labels = labels.to(device)
-            output, _ = model(drug1_ids, drug2_ids, cell_features, graph_data)
+
+            x_dict = graph_data.collect('x')
+            edge_index_dict = graph_data.collect('edge_index')
+
+            output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict,edge_index_dict)
 
             ys = F.softmax(output, 1).to('cpu').data.numpy()
             predicted_labels = list(map(lambda x: np.argmax(x), ys))
@@ -100,9 +106,10 @@ def predict(model, device, loader_test, graph_data, mae=True):
     return total_labels.numpy().flatten(), total_preds.numpy().flatten(), total_prelabels.numpy().flatten()
 
 
-def train(device, graph_data, loader_train, loss_fn, model, optimizer, log_step, epoch, epochs, mae=True):
-    model.to(device)
-    model.train()
+def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, log_step, epoch, epochs, mae=True,
+          target_model=None, m=1.0):
+    online_model.to(device)
+    online_model.train()
     for batch_idx, data in enumerate(loader_train):
         drug1_ids, drug2_ids, cell_features, labels = data
 
@@ -110,15 +117,28 @@ def train(device, graph_data, loader_train, loss_fn, model, optimizer, log_step,
         labels = labels.to(device)
         optimizer.zero_grad()
 
-        output, loss_mae = model(drug1_ids, drug2_ids, cell_features, graph_data)
+        x_dict = graph_data.collect('x')
+        edge_index_dict = graph_data.collect('edge_index')
 
-        loss = loss_fn(output, labels)
+        mask_drug, mask_target = online_model.get_mask()
+        _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target,
+                                                                      ratio=0.2)
 
-        if mae:
-            loss = loss + loss_mae
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
+
+        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
+
+        loss = loss_fn(_output, labels)
+
+        loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
+
+        loss = loss + loss_mae
 
         loss.backward()
         optimizer.step()
+
+        update_target_network_parameters(online_model, target_model, m)
+
         if batch_idx % log_step == 0:
             print("[Train] {} Epoch[{}/{}],step[{}/{}],loss={:.6f}".format(
                 datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, epochs,
@@ -155,10 +175,6 @@ def main(args=None):
         device = torch.device('cpu')
         print('The code uses CPU!!!')
 
-    modeling = UnnamedModel()
-
-    print(modeling)
-
     data_df = pd.read_csv(hparams['data'])
     features_cell = pd.read_csv(hparams['f_cell'], index_col='Cell_Line_Name', dtype=str)
     graph_data = get_graph_data(features_drug_file=hparams['f_drug'],
@@ -175,11 +191,17 @@ def main(args=None):
     print('pot', pot)
     random_num = random.sample(range(0, lenth), lenth)
 
+    modeling = UnnamedModel
+
     for i in range(5):
 
-        model = modeling.to(device)
+        online_model = modeling().to(device)
+        target_model = modeling().to(device)
+
+        initializes_target_network(online_model, target_model)
+
         loss_fn = nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(model.parameters(), lr=hparams['lr'])
+        optimizer = torch.optim.Adam(online_model.parameters(), lr=hparams['lr'])
         # 学习率调整器，检测准确率的状态，然后衰减学习率
         scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, min_lr=1e-7, patience=5, verbose=True,
                                       threshold=0.0001, eps=1e-08)
@@ -210,12 +232,13 @@ def main(args=None):
 
         print('Training begin!')
         for epoch in range(epochs):
-            train(device, graph_data, loader_train, loss_fn, model, optimizer, hparams['log_step'], epoch, epochs)
+            train(device, graph_data, loader_train, loss_fn, online_model, optimizer, hparams['log_step'], epoch,
+                  epochs, target_model=target_model, m=0.996)
 
             # T is correct label
             # S is predict score
             # Y is predict label
-            T, S, Y = predict(model, device, loader_test, graph_data)
+            T, S, Y = predict(online_model, device, loader_test, graph_data)
 
             # compute preformence
             AUC = roc_auc_score(T, S)
@@ -237,7 +260,7 @@ def main(args=None):
                 with open(file_AUCs, 'a') as f:
                     f.write('\t'.join(map(str, AUCs)) + '\n')
 
-                torch.save(model.state_dict(), model_file_name)
+                torch.save(online_model.state_dict(), model_file_name)
 
             print('best_auc', best_auc)
 
