@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -14,9 +13,9 @@ class HeteroGNNs(nn.Module):
 
         if self.mae:
             self.mask_target = nn.parameter.Parameter(nn.init.xavier_uniform_(
-                torch.empty(1, target_features_num)).float(), requires_grad=True)
+                torch.empty(1, target_features_num)).float())
             self.mask_drug = nn.parameter.Parameter(nn.init.xavier_uniform_(
-                torch.empty(1, drug_features_num)).float(), requires_grad=True)
+                torch.empty(1, drug_features_num)).float())
 
         # graph network
         self.convs = nn.ModuleList()
@@ -29,12 +28,18 @@ class HeteroGNNs(nn.Module):
             }, aggr='sum')
             self.convs.append(conv)
 
-    def forward(self,graph_data,ratio=0.2):
+    def forward(self, graph_data, ratio=0.2):
 
         x_dict = graph_data.collect('x')
         edge_index_dict = graph_data.collect('edge_index')
         drug_features = x_dict['drug']
         target_features = x_dict['target']
+
+        for conv in self.convs:
+            x_dict = conv(x_dict, edge_index_dict)
+            x_dict = {key: x.relu() for key, x in x_dict.items()}
+
+        loss_mae = None
 
         if self.mae:
             drug_mask_index = get_mask_index(drug_features.shape[0], ratio)
@@ -46,11 +51,11 @@ class HeteroGNNs(nn.Module):
             target_mask_index = target_mask_index.to(target_features.device)
 
             drug_m = drug_mask_index * self.mask_drug
-            _drug_features = torch.mul(drug_features, torch.ones(drug_mask_index.size()) - drug_mask_index) + drug_m
+            _drug_features = torch.mul(drug_features, torch.ones(drug_mask_index.size()).to(drug_features.device) - drug_mask_index) + drug_m
 
             target_m = target_mask_index * self.mask_target
             _target_features = torch.mul(target_features,
-                                         torch.ones(target_mask_index.size()) - target_mask_index) + target_m
+                                         torch.ones(target_mask_index.size()).to(target_features.device) - target_mask_index) + target_m
 
             _x_dict = {'drug': _drug_features, 'target': _target_features}
 
@@ -58,13 +63,9 @@ class HeteroGNNs(nn.Module):
                 _x_dict = conv(_x_dict, edge_index_dict)
                 _x_dict = {key: x.relu() for key, x in _x_dict.items()}
 
-        for conv in self.convs:
-            x_dict = conv(x_dict, edge_index_dict)
-            x_dict = {key: x.relu() for key, x in x_dict.items()}
-
-        if self.mae:
             loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
-        return x_dict,loss_mae
+
+        return x_dict, loss_mae
 
 
 class Reduction(nn.Module):
@@ -92,17 +93,16 @@ class UnnamedModel(nn.Module):
         self.gnns = HeteroGNNs()
 
         # get cell features
-        self.reduction = Reduction(num_features_cell,hidden_channels*2)
+        self.reduction = Reduction(num_features_cell, hidden_channels * 2)
 
         # final transform
-        self.reduction2 = Reduction(hidden_channels*4,hidden_channels)
+        self.reduction2 = Reduction(hidden_channels * 4, hidden_channels)
 
         # output layer
         self.classfier = nn.Linear(hidden_channels, 2)
 
     def forward(self, drug1_id, drug2_id, cell_features, graph_data):
-
-        x_dict,loss_mae=self.gnns(graph_data)
+        x_dict, loss_mae = self.gnns(graph_data)
 
         # get drugs hidden_state
         drug1 = x_dict['drug'][drug1_id]
@@ -117,5 +117,3 @@ class UnnamedModel(nn.Module):
         output = self.classfier(hidden)
 
         return output, loss_mae
-
-

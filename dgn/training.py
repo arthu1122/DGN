@@ -72,7 +72,7 @@ def get_hparams(args):
     return params
 
 
-def predict(model, device, loader_test, graph_data):
+def predict(model, device, loader_test, graph_data, mae=True):
     model.to(device)
     model.eval()
 
@@ -88,7 +88,7 @@ def predict(model, device, loader_test, graph_data):
             drug1_ids, drug2_ids, cell_features, labels = data
             cell_features = cell_features.to(device)
             labels = labels.to(device)
-            output,_ = model(drug1_ids, drug2_ids, cell_features, graph_data)
+            output, _ = model(drug1_ids, drug2_ids, cell_features, graph_data)
 
             ys = F.softmax(output, 1).to('cpu').data.numpy()
             predicted_labels = list(map(lambda x: np.argmax(x), ys))
@@ -100,7 +100,7 @@ def predict(model, device, loader_test, graph_data):
     return total_labels.numpy().flatten(), total_preds.numpy().flatten(), total_prelabels.numpy().flatten()
 
 
-def train(device, graph_data, loader_train, loss_fn, model, optimizer, log_step, epoch, epochs):
+def train(device, graph_data, loader_train, loss_fn, model, optimizer, log_step, epoch, epochs, mae=True):
     model.to(device)
     model.train()
     for batch_idx, data in enumerate(loader_train):
@@ -109,11 +109,13 @@ def train(device, graph_data, loader_train, loss_fn, model, optimizer, log_step,
         cell_features = cell_features.to(device)
         labels = labels.to(device)
         optimizer.zero_grad()
-        output,loss_mae = model(drug1_ids, drug2_ids, cell_features, graph_data)
+
+        output, loss_mae = model(drug1_ids, drug2_ids, cell_features, graph_data)
+
         loss = loss_fn(output, labels)
 
-
-        loss=loss+loss_mae
+        if mae:
+            loss = loss + loss_mae
 
         loss.backward()
         optimizer.step()
@@ -157,9 +159,6 @@ def main(args=None):
 
     print(modeling)
 
-
-
-
     data_df = pd.read_csv(hparams['data'])
     features_cell = pd.read_csv(hparams['f_cell'], index_col='Cell_Line_Name', dtype=str)
     graph_data = get_graph_data(features_drug_file=hparams['f_drug'],
@@ -183,7 +182,7 @@ def main(args=None):
         optimizer = torch.optim.Adam(model.parameters(), lr=hparams['lr'])
         # 学习率调整器，检测准确率的状态，然后衰减学习率
         scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, min_lr=1e-7, patience=5, verbose=True,
-                                  threshold=0.0001, eps=1e-08)
+                                      threshold=0.0001, eps=1e-08)
 
         test_num = random_num[pot * i:pot * (i + 1)]
         train_num = random_num[:pot * i] + random_num[pot * (i + 1):]
