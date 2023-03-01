@@ -49,7 +49,7 @@ def get_id(id_dict, ID, is_drug=True):
 
 
 def get_graph_data(features_drug_file, features_target_file, e_dd_index_file, e_dt_index_file, e_tt_index_file,
-                   e_dd_att_file,device):
+                   e_dd_att_file, device):
     features_drug = pd.read_csv(features_drug_file, index_col='DrugID', dtype=str)
     features_target = pd.read_csv(features_target_file, index_col='TargetID', dtype=str)
 
@@ -64,6 +64,7 @@ def get_graph_data(features_drug_file, features_target_file, e_dd_index_file, e_
 
     drug_feature = torch.FloatTensor(features_drug.values.astype('float'))
     target_feature = torch.FloatTensor(features_target.values.astype('float'))
+
 
     def transform(indexs):
         # "[0,1]\n" -> [0,1]
@@ -80,7 +81,8 @@ def get_graph_data(features_drug_file, features_target_file, e_dd_index_file, e_
 
     dd_edge_att = torch.FloatTensor([float(att[:-1]) for att in edge_drug_drug_att])
 
-    graph_data = create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_edge_index, dd_edge_att,device)
+    graph_data = create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_edge_index, dd_edge_att,
+                             device)
 
     return graph_data
 
@@ -125,4 +127,3 @@ class GNNDataset(Dataset):
 
     def __len__(self):
         return len(self.data)
-

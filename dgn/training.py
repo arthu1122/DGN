@@ -1,5 +1,6 @@
 import argparse
 import datetime
+import os
 import random
 
 import numpy as np
@@ -71,6 +72,10 @@ def get_hparams(args):
         if key in Default_Hparams.keys() and item:
             params[key] = item
 
+    timestr = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    os.mkdir(params['output'] + timestr)
+    params['output'] = params['output'] + timestr
+
     return params
 
 
@@ -94,7 +99,7 @@ def predict(model, device, loader_test, graph_data, mae=True):
             x_dict = graph_data.collect('x')
             edge_index_dict = graph_data.collect('edge_index')
 
-            output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict,edge_index_dict)
+            output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
 
             ys = F.softmax(output, 1).to('cpu').data.numpy()
             predicted_labels = list(map(lambda x: np.argmax(x), ys))
