@@ -74,7 +74,7 @@ def get_hparams(args):
 
     timestr = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     os.mkdir(params['output'] + timestr)
-    params['output'] = params['output'] + timestr
+    params['output'] = params['output'] + timestr+"/"
 
     return params
 
