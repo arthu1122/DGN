@@ -3,8 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import HeteroConv, GATConv
 
-from dgn.utils.mae import get_mae_loss, get_mask_index
-
 
 class HeteroGNNs(nn.Module):
     def __init__(self, num_layers=1, hidden_channels=768):

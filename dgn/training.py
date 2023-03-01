@@ -17,8 +17,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from datasets.dataset import GNNDataset, get_graph_data
-from dgn.utils.ema import initializes_target_network, update_target_network_parameters
-from dgn.utils.mae import get_mask_x_dict, get_mae_loss
+from utils.ema import initializes_target_network, update_target_network_parameters
+from utils.mae import get_mask_x_dict, get_mae_loss
 from models.gat import UnnamedModel
 
 Default_Hparams = {
