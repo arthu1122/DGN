@@ -74,7 +74,7 @@ def get_hparams(args):
 
     timestr = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     os.mkdir(params['output'] + timestr)
-    params['output'] = params['output'] + timestr+"/"
+    params['output'] = params['output'] + timestr + "/"
 
     return params
 
@@ -131,13 +131,18 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, lo
 
         _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
 
+        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
+
         output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
 
         loss = loss_fn(_output, labels)
+        loss1 = loss_fn(output1, labels)
 
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
 
-        loss = loss + loss_mae
+        loss_kl = (output1 * (torch.log(output1) - torch.log(_output))).sum(dim=1).sum()
+
+        loss = loss + loss1 + loss_kl + 0.1 * loss_mae
 
         loss.backward()
         optimizer.step()
