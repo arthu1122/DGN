@@ -111,7 +111,7 @@ def predict(model, device, loader_test, graph_data, mae=True):
     return total_labels.numpy().flatten(), total_preds.numpy().flatten(), total_prelabels.numpy().flatten()
 
 
-def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, log_step, epoch, epochs, mae=True,
+def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, log_step, epoch, epochs,
           target_model=None, m=1.0):
     online_model.to(device)
     online_model.train()
@@ -127,7 +127,7 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, lo
 
         mask_drug, mask_target = online_model.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target,
-                                                                      ratio=0.2)
+                                                                      ratio=0.1)
 
         _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
 
