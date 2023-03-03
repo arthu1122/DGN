@@ -82,7 +82,7 @@ class UnnamedModel(nn.Module):
 
         output = self.classfier(hidden)
 
-        output=F.softmax(output,dim=1)
+        # output=F.softmax(output,dim=1)
 
         return output, x_dict
 
