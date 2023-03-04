@@ -140,7 +140,7 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, lo
 
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
 
-        loss_kl = (output1 * (torch.log(F.softmax(output1,1) ) - torch.log(F.softmax(_output,1) ))).sum(dim=1).sum()
+        loss_kl = (output1 * (torch.log(F.softmax(output1, 1)) - torch.log(F.softmax(_output, 1)))).sum(dim=1).sum()
 
         loss = loss + loss1 + loss_kl + 0.1 * loss_mae
 
@@ -151,9 +151,7 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, lo
 
         if batch_idx % log_step == 0:
             print("[Train] {} Epoch[{}/{}],step[{}/{}],loss={:.6f}".format(
-                datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, epochs,
-                                                                       batch_idx + 1, len(loader_train),
-                loss.item()))
+                datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, epochs, batch_idx + 1, len(loader_train), loss.item()))
 
 
 # get batch
@@ -242,6 +240,7 @@ def main(args=None):
 
         print('Training begin!')
         for epoch in range(epochs):
+            # TODO
             train(device, graph_data, loader_train, loss_fn, online_model, optimizer, hparams['log_step'], epoch,
                   epochs, target_model=target_model, m=0.996)
 
@@ -249,6 +248,10 @@ def main(args=None):
             # S is predict score
             # Y is predict label
             T, S, Y = predict(online_model, device, loader_test, graph_data)
+
+            print(T)
+            print(S)
+            print(Y)
 
             # compute preformence
             AUC = roc_auc_score(T, S)
