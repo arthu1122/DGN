@@ -154,7 +154,9 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, lo
 
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
 
-        loss_kl = (output1 * (torch.log(F.softmax(output1, 1)) - torch.log(F.softmax(_output, 1)))).sum(dim=1).sum()
+
+
+        loss_kl =nn.functional.kl_div(F.softmax(output1, 1).log(), F.softmax(_output, 1), reduction='batchmean')
 
         loss = loss + loss1 + loss_kl + 0.1 * loss_mae
 
