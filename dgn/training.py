@@ -102,25 +102,25 @@ def predict(model, device, loader_test, graph_data, mae=True):
             edge_index_dict = graph_data.collect('edge_index')
 
             output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
-            print("model output: {}".format(output))
+            # print("model output: {}".format(output))
 
             ys = F.softmax(output, 1).to('cpu').data.numpy()
-            print("model output after softmax: {}".format(ys))
+            # print("model output after softmax: {}".format(ys))
 
             predicted_labels = list(map(lambda x: np.argmax(x), ys))
-            print("curr predicted_labels: {}".format(predicted_labels))
+            # print("curr predicted_labels: {}".format(predicted_labels))
 
             predicted_scores = list(map(lambda x: x[1], ys))
-            print("curr predicted_scores: {}".format(predicted_scores))
+            # print("curr predicted_scores: {}".format(predicted_scores))
 
             total_prelabels = torch.cat((total_prelabels, torch.Tensor(predicted_labels)), 0)
-            print("total_prelabels: {}".format(total_preds))
+            # print("total_prelabels: {}".format(total_preds))
 
             total_preds = torch.cat((total_preds, torch.Tensor(predicted_scores)), 0)
-            print("total_preds: {}".format(total_preds))
+            # print("total_preds: {}".format(total_preds))
 
             total_labels = torch.cat((total_labels, labels.cpu()), 0)
-            print("total_labels: {}".format(total_labels))
+            # print("total_labels: {}".format(total_labels))
 
     return total_labels.numpy().flatten(), total_preds.numpy().flatten(), total_prelabels.numpy().flatten()
 
