@@ -51,6 +51,7 @@ def get_args(args):
     parser.add_argument("--kl", type=float, default=1.0, help="kl loss ratio")
     parser.add_argument("--mae", type=float, default=0.1, help="mae loss ratio")
     parser.add_argument("--num_workers", type=int, default=4, help="dataloader num_workers")
+    parser.add_argument("--setting", type=int, default=3, help="train type")
 
     args = parser.parse_args(args)
 
@@ -110,32 +111,52 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
         x_dict = graph_data.collect('x')
         edge_index_dict = graph_data.collect('edge_index')
 
-        mask_drug, mask_target = online_model.get_mask()
-        _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
-
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
-
-        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
-
-        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
-
-        loss0 = loss_fn(_output, labels)
-        loss1 = loss_fn(output1, labels)
-
-        loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
-
-        loss_kl = nn.functional.kl_div(F.softmax(output1, 1).log(), F.softmax(_output, 1), reduction='batchmean')
-
-        loss = loss0 + loss1 + args.kl * loss_kl + args.mae * loss_mae
+        loss, loss_print = get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict)
 
         loss.backward()
         optimizer.step()
-
-        update_target_network_parameters(online_model, target_model, args.target_net_update)
+        if not args.setting==1:
+            update_target_network_parameters(online_model, target_model, args.target_net_update)
 
         if batch_idx % args.log_step == 0:
-            print("[Train] {} Epoch[{}/{}] step[{}/{}] loss0={:.6f} loss1={:.6f} loss_kl={:.6f} loss_mae={:.6f} ".format(
-                datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, args.epochs, batch_idx + 1, len(loader_train), loss0.item(), loss1.item(), loss_kl.item(), loss_mae.item()))
+            print("[Train] {} Epoch[{}/{}] step[{}/{}] ".format(
+                datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, args.epochs, batch_idx + 1, len(loader_train)) + loss_print)
+
+
+def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict):
+    loss_print = ""
+    loss = torch.inf
+    # single model
+    if args.setting == 1:
+        output, x_dict = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
+        loss = loss_fn(output, labels)
+        loss_print = "loss={:.6f}".format(loss.item())
+    # MAE + EMA
+    elif args.setting == 2:
+        mask_drug, mask_target = online_model.get_mask()
+        _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
+        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
+        loss0 = loss_fn(_output, labels)
+
+        loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
+
+        loss = loss0 + args.mae * loss_mae
+        loss_print = "loss={:.6f} [loss0={:.6f} loss_mae={:.6f}]".format(loss.item(), loss0.item(), loss_mae.item())
+    # MAE + EMA + KL
+    elif args.setting == 3:
+        mask_drug, mask_target = online_model.get_mask()
+        _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
+        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
+        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
+        loss0 = loss_fn(_output, labels)
+        loss1 = loss_fn(output1, labels)
+        loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
+        loss_kl = nn.functional.kl_div(F.softmax(output1, 1).log(), F.softmax(_output, 1), reduction='batchmean')
+        loss = loss0 + loss1 + args.kl * loss_kl + args.mae * loss_mae
+        loss_print = "loss={:.6f} [loss0={:.6f} loss1={:.6f} loss_kl={:.6f} loss_mae={:.6f}]".format(loss.item(), loss0.item(), loss1.item(), loss_kl.item(), loss_mae.item())
+    return loss, loss_print
 
 
 # get batch
@@ -211,7 +232,7 @@ def main(args=None):
         AUCs = "%-10s%-15s%-15s%-15s%-15s%-15s%-15s%-15s%-15s" % ('Epoch', 'AUC_dev', 'PR_AUC', 'ACC', 'BACC', 'PREC', 'TPR', 'KAPPA', 'RECALL')
         # AUCs = 'Epoch\tAUC_dev\tPR_AUC\tACC\tBACC\tPREC\tTPR\tKAPPA\tRECALL'
         with open(file_AUCs, 'w') as f:
-            f.write(str(args)+"\n")
+            f.write(str(args) + "\n")
             f.write(AUCs + '\n')
 
         best_auc = 0
