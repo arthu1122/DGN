@@ -46,7 +46,7 @@ def get_args(args):
     parser.add_argument("--dd_att", type=str, default="../data/processed/drug_drug_edge_att.txt", help="drug-drug edge attribute file(.txt)")
     parser.add_argument("--drug_vocab", type=str, default="../data/processed/drug_vocab.txt", help="drug encoded file(.txt)")
     parser.add_argument("--output", type=str, default="../data/result/", help="output file fold")
-    parser.add_argument("--target_model_update", type=float, default=0.996, help="leaving ratio of target_model")
+    parser.add_argument("--target_net_update", type=float, default=0.996, help="leaving ratio of target_model")
     parser.add_argument("--mask_ratio", type=float, default=0.1, help="mae mask ratio")
     parser.add_argument("--kl", type=float, default=1.0, help="kl loss ratio")
     parser.add_argument("--mae", type=float, default=0.1, help="mae loss ratio")
@@ -131,7 +131,7 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
         loss.backward()
         optimizer.step()
 
-        update_target_network_parameters(online_model, target_model, args.target_model_update)
+        update_target_network_parameters(online_model, target_model, args.target_net_update)
 
         if batch_idx % args.log_step == 0:
             print("[Train] {} Epoch[{}/{}] step[{}/{}] loss0={:.6f} loss1={:.6f} loss_kl={:.6f} loss_mae={:.6f} ".format(
@@ -167,6 +167,8 @@ def main(args=None):
     else:
         device = torch.device('cpu')
         print('The code uses CPU!!!')
+
+    print(args)
 
     data_df = pd.read_csv(args.data)
     features_cell = pd.read_csv(args.f_cell, index_col='Cell_Line_Name', dtype=str)
