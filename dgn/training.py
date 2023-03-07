@@ -50,6 +50,7 @@ def get_args(args):
     parser.add_argument("--mask_ratio", type=float, default=0.1, help="mae mask ratio")
     parser.add_argument("--kl", type=float, default=1.0, help="kl loss ratio")
     parser.add_argument("--mae", type=float, default=0.1, help="mae loss ratio")
+    parser.add_argument("--num_workers", type=int, default=4, help="dataloader num_workers")
 
     args = parser.parse_args(args)
 
@@ -159,7 +160,8 @@ def main(args=None):
 
     # CPU or GPU
     if torch.cuda.is_available():
-        device_index = 'cuda:' + str(args.device)
+        args.num_workers = len(args.device.split(",")) * 4
+        device_index = 'cuda:' + args.device
         device = torch.device(device_index)
         print('The code uses GPU...')
     else:
@@ -197,8 +199,10 @@ def main(args=None):
         data_train = GNNDataset(label_df=data_df.iloc[train_num], vocab_file=args.drug_vocab, features_cell_df=features_cell)
         data_test = GNNDataset(label_df=data_df.iloc[test_num], vocab_file=args.drug_vocab, features_cell_df=features_cell)
 
-        loader_train = DataLoader(data_train, batch_size=args.train_batch_size, shuffle=None, collate_fn=batch_collate, num_workers=4, pin_memory=True)
-        loader_test = DataLoader(data_test, batch_size=args.test_batch_size, shuffle=None, collate_fn=batch_collate, num_workers=4, pin_memory=True)
+        loader_train = DataLoader(data_train, batch_size=args.train_batch_size, shuffle=None, collate_fn=batch_collate,
+                                  num_workers=args.num_workers, pin_memory=True)
+        loader_test = DataLoader(data_test, batch_size=args.test_batch_size, shuffle=None, collate_fn=batch_collate,
+                                 num_workers=args.num_workers, pin_memory=True)
 
         model_file_name = args.output + str(i) + '--model.model'
         file_AUCs = args.output + str(i) + '--AUCs.txt'
