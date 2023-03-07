@@ -2,6 +2,7 @@ import random
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 
 
 def get_mask_index(total, ratio):
@@ -12,11 +13,9 @@ def get_mask_index(total, ratio):
     :param ratio: mask ratio
     :return: mask index matrix
     """
-    ranks = np.arange(total)
-    sample_num = int(ratio * total)
-    indices = random.sample(list(ranks), sample_num)
-    mask = torch.zeros((total, 1))
-    mask[indices] = 1
+    mask = torch.ones((total, 1))
+    mask = F.dropout(mask, p=ratio)
+    mask = torch.where(mask != 0, 0, 1)
     return mask
 
 

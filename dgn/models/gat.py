@@ -19,7 +19,7 @@ class HeteroGNNs(nn.Module):
             }, aggr='sum')
             self.convs.append(conv)
 
-    def forward(self, x_dict,edge_index_dict):
+    def forward(self, x_dict, edge_index_dict):
         for conv in self.convs:
             x_dict = conv(x_dict, edge_index_dict)
             x_dict = {key: x.relu() for key, x in x_dict.items()}
@@ -47,28 +47,26 @@ class Reduction(nn.Module):
 
 class UnnamedModel(nn.Module):
     def __init__(self, target_features_num=570, drug_features_num=200, num_features_cell=890, hidden_channels=768,
-                 dropout=0.2, mae=True):
+                 dropout=0.2, num_layers=1):
         super().__init__()
 
         # gnn
-        self.gnn = HeteroGNNs()
+        self.gnn = HeteroGNNs(num_layers=num_layers)
 
         # get cell features
-        self.reduction = Reduction(num_features_cell, hidden_channels * 2)
+        self.reduction = Reduction(num_features_cell, hidden_channels * 2, dropout=dropout)
 
         # final transform
-        self.reduction2 = Reduction(hidden_channels * 4, hidden_channels)
+        self.reduction2 = Reduction(hidden_channels * 4, hidden_channels, dropout=dropout)
 
         # output layer
         self.classfier = nn.Linear(hidden_channels, 2)
 
-        self.mask_target = nn.parameter.Parameter(nn.init.xavier_uniform_(
-                torch.empty(1, target_features_num)).float())
-        self.mask_drug = nn.parameter.Parameter(nn.init.xavier_uniform_(
-                torch.empty(1, drug_features_num)).float())
+        self.mask_target = nn.parameter.Parameter(nn.init.xavier_uniform_(torch.empty(1, target_features_num)).float())
+        self.mask_drug = nn.parameter.Parameter(nn.init.xavier_uniform_(torch.empty(1, drug_features_num)).float())
 
-    def forward(self, drug1_id, drug2_id, cell_features, x_dict,egde_index_dict):
-        x_dict = self.gnn(x_dict,egde_index_dict)
+    def forward(self, drug1_id, drug2_id, cell_features, x_dict, egde_index_dict):
+        x_dict = self.gnn(x_dict, egde_index_dict)
 
         # get drugs hidden_state
         drug1 = x_dict['drug'][drug1_id]
@@ -82,9 +80,7 @@ class UnnamedModel(nn.Module):
 
         output = self.classfier(hidden)
 
-        # output=F.softmax(output,dim=1)
-
         return output, x_dict
 
     def get_mask(self):
-        return self.mask_drug,self.mask_target
+        return self.mask_drug, self.mask_target

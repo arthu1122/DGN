@@ -30,7 +30,6 @@ def create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_e
 
     data['drug', 'd-d', 'drug'].edge_attr = torch.unsqueeze(dd_edge_att, -1)  # [num_edges_d-d, num_features_d-d]
     data['drug', 'd-t', 'target'].edge_attr = torch.ones([dt_edge_index.shape[-1], 1], device=device)
-    # data['target', 't-d', 'drug'].edge_attr = torch.ones([dt_edge_index.shape[-1],1])
     data['target', 't-t', 'target'].edge_attr = torch.ones([tt_edge_index.shape[-1], 1], device=device)
 
     # undirect edge
@@ -115,10 +114,6 @@ class GNNDataset(Dataset):
         drug2_id = get_id(self.id_dict, drug2)
 
         cell_name = cell_name.lower()
-
-        # try:
-        #     cell_feature = list(self.features_cell.loc[cell_name])
-        # except KeyError as e:
 
         cell_feature = list(self.features_cell.astype('float').loc[cell_name])
         cell_feature = torch.FloatTensor(cell_feature)
