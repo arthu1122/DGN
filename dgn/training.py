@@ -115,7 +115,7 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
 
         loss.backward()
         optimizer.step()
-        if not args.setting==1:
+        if not args.setting == 1:
             update_target_network_parameters(online_model, target_model, args.target_net_update)
 
         if batch_idx % args.log_step == 0:
