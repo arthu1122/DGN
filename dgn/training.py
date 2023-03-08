@@ -153,7 +153,9 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
         loss0 = loss_fn(_output, labels)
         loss1 = loss_fn(output1, labels)
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
-        loss_kl = nn.functional.kl_div(F.softmax(output1, 1).log(), F.softmax(_output, 1), reduction='batchmean')
+        loss_kl0 = nn.functional.kl_div(F.softmax(output1, 1).log(), F.softmax(_output, 1), reduction='batchmean')
+        loss_kl1 = nn.functional.kl_div(F.softmax(_output, 1).log(), F.softmax(output1, 1), reduction='batchmean')
+        loss_kl=(loss_kl0+loss_kl1)/2
         loss = loss0 + loss1 + args.kl * loss_kl + args.mae * loss_mae
         loss_print = "loss={:.6f} [loss0={:.6f} loss1={:.6f} loss_kl={:.6f} loss_mae={:.6f}]".format(loss.item(), loss0.item(), loss1.item(), loss_kl.item(), loss_mae.item())
     return loss, loss_print
