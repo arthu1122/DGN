@@ -2,6 +2,7 @@ import argparse
 import datetime
 import os
 import random
+import time
 
 import numpy as np
 import pandas as pd
@@ -102,20 +103,35 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
     online_model.to(device)
     online_model.train()
     for batch_idx, data in enumerate(loader_train):
-        drug1_ids, drug2_ids, cell_features, labels = data
 
+        drug1_ids, drug2_ids, cell_features, labels = data
         cell_features = cell_features.to(device)
         labels = labels.to(device)
-        optimizer.zero_grad()
 
+
+        start_time = time.time()
+
+        optimizer.zero_grad()
         x_dict = graph_data.collect('x')
         edge_index_dict = graph_data.collect('edge_index')
-
         loss, loss_print = get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict)
+
+        end_time = time.time()
+        run_time = end_time - start_time
+        print("{} {}s".format("get loss", run_time))
+
+
+        start_time = time.time()
 
         loss.backward()
         optimizer.step()
-        if not args.setting == 1 and not args.setting ==4:
+
+        end_time = time.time()
+        run_time = end_time - start_time
+        print("{} {}s".format("backward", run_time))
+
+
+        if not args.setting == 1 and not args.setting == 4:
             update_target_network_parameters(online_model, target_model, args.target_net_update)
 
         if batch_idx % args.log_step == 0:
@@ -261,7 +277,10 @@ def main(args=None):
             # T is correct label
             # S is predict score
             # Y is predict label
+
+
             T, S, Y = predict(online_model, device, loader_test, graph_data)
+
 
             # compute preformence
             AUC = roc_auc_score(T, S)
