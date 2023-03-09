@@ -155,9 +155,23 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
         loss_kl0 = nn.functional.kl_div(F.softmax(output1, 1).log(), F.softmax(_output, 1), reduction='batchmean')
         loss_kl1 = nn.functional.kl_div(F.softmax(_output, 1).log(), F.softmax(output1, 1), reduction='batchmean')
-        loss_kl=(loss_kl0+loss_kl1)/2
+        loss_kl = (loss_kl0 + loss_kl1) / 2
         loss = loss0 + loss1 + args.kl * loss_kl + args.mae * loss_mae
         loss_print = "loss={:.6f} [loss0={:.6f} loss1={:.6f} loss_kl={:.6f} loss_mae={:.6f}]".format(loss.item(), loss0.item(), loss1.item(), loss_kl.item(), loss_mae.item())
+    elif args.setting == 4:
+        mask_drug, mask_target = online_model.get_mask()
+        _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
+        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
+        loss0 = loss_fn(_output, labels)
+        loss1 = loss_fn(output1, labels)
+
+        loss_kl0 = nn.functional.kl_div(F.softmax(output1, 1).log(), F.softmax(_output, 1), reduction='batchmean')
+        loss_kl1 = nn.functional.kl_div(F.softmax(_output, 1).log(), F.softmax(output1, 1), reduction='batchmean')
+        loss_kl = (loss_kl0 + loss_kl1) / 2
+        loss = loss0 + loss1 + args.kl * loss_kl
+        loss_print = "loss={:.6f} [loss0={:.6f} loss1={:.6f} loss_kl={:.6f}]".format(loss.item(), loss0.item(), loss1.item(), loss_kl.item())
+
     return loss, loss_print
 
 
@@ -183,7 +197,6 @@ def main(args=None):
 
     # CPU or GPU
     if torch.cuda.is_available():
-        args.num_workers = len(args.device.split(",")) * 4
         device_index = 'cuda:' + args.device
         device = torch.device(device_index)
         print('The code uses GPU...')
