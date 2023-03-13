@@ -109,11 +109,12 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
 
         drug1_ids, drug2_ids, cell_features, labels = data
 
-        print("{} {}".format("cell_features = ", cell_features.device))
+
 
         cell_features = cell_features.to(device)
         labels = labels.to(device)
 
+        print("{} {}".format("cell_features = ", cell_features.device))
 
         optimizer.zero_grad()
         x_dict = graph_data.collect('x')
