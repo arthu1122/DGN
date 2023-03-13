@@ -103,33 +103,23 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
     online_model.to(device)
     online_model.train()
     for batch_idx, data in enumerate(loader_train):
+        start_time = time.time()
 
         drug1_ids, drug2_ids, cell_features, labels = data
+
+        print("{} {}".format("cell_features = ", cell_features.device))
+
         cell_features = cell_features.to(device)
         labels = labels.to(device)
 
-
-        start_time = time.time()
 
         optimizer.zero_grad()
         x_dict = graph_data.collect('x')
         edge_index_dict = graph_data.collect('edge_index')
         loss, loss_print = get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict)
 
-        end_time = time.time()
-        run_time = end_time - start_time
-        print("{} {}s".format("get loss", run_time))
-
-
-        start_time = time.time()
-
         loss.backward()
         optimizer.step()
-
-        end_time = time.time()
-        run_time = end_time - start_time
-        print("{} {}s".format("backward", run_time))
-
 
         if not args.setting == 1 and not args.setting == 4:
             update_target_network_parameters(online_model, target_model, args.target_net_update)
@@ -137,6 +127,10 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
         if batch_idx % args.log_step == 0:
             print("[Train] {} Epoch[{}/{}] step[{}/{}] ".format(
                 datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, args.epochs, batch_idx + 1, len(loader_train)) + loss_print)
+
+        end_time = time.time()
+        run_time = end_time - start_time
+        print("{} {}s".format("a batch", run_time))
 
 
 def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict):
@@ -193,6 +187,8 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
 
 # get batch
 def batch_collate(batch):
+
+
     drug1_ids = []
     drug2_ids = []
     cell_features = []
@@ -205,6 +201,8 @@ def batch_collate(batch):
 
     cell_features = torch.concat(cell_features)
     labels = torch.tensor(labels)
+
+
     return drug1_ids, drug2_ids, cell_features, labels
 
 

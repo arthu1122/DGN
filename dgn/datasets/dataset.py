@@ -1,3 +1,5 @@
+import time
+
 import torch
 from pandas import Series
 from torch import tensor
@@ -107,6 +109,7 @@ class GNNDataset(Dataset):
                 self.id_dict[self.vocab[i][:-1]] = i
 
     def __getitem__(self, index):
+
         index_data = self.data.iloc[index]
         cell_name, drug1, drug2 = index_data['Cell_Line_Name'], index_data['DrugID1'], index_data['DrugID2']
 
