@@ -14,10 +14,10 @@ class HeteroGNNs(nn.Module):
         self.convs = nn.ModuleList()
         for _ in range(self.num_layers):
             conv = HeteroConv({
-                ('drug', 'd-d', 'drug'): GATConv((args.drug_features_num, args.drug_features_num), args.hidden_channels),
+                ('drug', 'd-d', 'drug'): GATConv(args.drug_features_num, args.hidden_channels, add_self_loops=False),
                 ('drug', 'd-t', 'target'): GATConv((args.drug_features_num, args.target_features_num), args.hidden_channels, add_self_loops=False),
                 ('target', 'rev_d-t', 'drug'): GATConv((args.target_features_num, args.drug_features_num), args.hidden_channels, add_self_loops=False),
-                ('target', 't-t', 'target'): GATConv((args.target_features_num, args.drug_features_num), args.hidden_channels, ),
+                ('target', 't-t', 'target'): GATConv(args.target_features_num, args.hidden_channels,  add_self_loops=False),
             }, aggr='sum')
             self.convs.append(conv)
 
