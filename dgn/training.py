@@ -163,7 +163,7 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
         loss_print = "loss={:.6f}".format(loss.item())
     # MAE + EMA
     elif args.setting == 2:
-        mask_drug, mask_target = online_model.get_mask()
+        mask_drug, mask_target = online_model.module.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
         _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
         output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
@@ -175,7 +175,7 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
         loss_print = "loss={:.6f} [loss0={:.6f} loss_mae={:.6f}]".format(loss.item(), loss0.item(), loss_mae.item())
     # MAE + EMA + KL
     elif args.setting == 3:
-        mask_drug, mask_target = online_model.get_mask()
+        mask_drug, mask_target = online_model.module.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
         _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
         output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
@@ -189,7 +189,7 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
         loss = loss0 + loss1 + args.kl * loss_kl + args.mae * loss_mae
         loss_print = "loss={:.6f} [loss0={:.6f} loss1={:.6f} loss_kl={:.6f} loss_mae={:.6f}]".format(loss.item(), loss0.item(), loss1.item(), loss_kl.item(), loss_mae.item())
     elif args.setting == 4:
-        mask_drug, mask_target = online_model.get_mask()
+        mask_drug, mask_target = online_model.module.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
         _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
         output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
