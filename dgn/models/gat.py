@@ -5,17 +5,17 @@ from torch_geometric.nn import HeteroConv, GATConv
 
 
 class HeteroGNNs(nn.Module):
-    def __init__(self, num_layers=1, hidden_channels=768):
+    def __init__(self, args):
         super().__init__()
 
         # graph network
         self.convs = nn.ModuleList()
-        for _ in range(num_layers):
+        for _ in range(args.num_layers):
             conv = HeteroConv({
-                ('drug', 'd-d', 'drug'): GATConv((-1, -1), hidden_channels),
-                ('drug', 'd-t', 'target'): GATConv((-1, -1), hidden_channels, add_self_loops=False),
-                ('target', 'rev_d-t', 'drug'): GATConv((-1, -1), hidden_channels, add_self_loops=False),
-                ('target', 't-t', 'target'): GATConv((-1, -1), hidden_channels, ),
+                ('drug', 'd-d', 'drug'): GATConv((-1, -1), args.hidden_channels),
+                ('drug', 'd-t', 'target'): GATConv((-1, -1), args.hidden_channels, add_self_loops=False),
+                ('target', 'rev_d-t', 'drug'): GATConv((-1, -1), args.hidden_channels, add_self_loops=False),
+                ('target', 't-t', 'target'): GATConv((-1, -1), args.hidden_channels, ),
             }, aggr='sum')
             self.convs.append(conv)
 
@@ -28,16 +28,16 @@ class HeteroGNNs(nn.Module):
 
 
 class Reduction(nn.Module):
-    def __init__(self, input_size, output_size, hidden_size1=2048, hidden_size2=512, dropout=0.2):
+    def __init__(self, input_size, output_size, args):
         super().__init__()
         self.reduction = nn.Sequential(
-            nn.Linear(input_size, hidden_size1),
+            nn.Linear(input_size, args.project1),
             nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_size1, hidden_size2),
+            nn.Dropout(args.dropout),
+            nn.Linear(args.project1, args.project2),
             nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(hidden_size2, output_size),
+            nn.Dropout(args.dropout),
+            nn.Linear(args.project2, output_size),
             nn.ReLU()
         )
 
@@ -46,24 +46,23 @@ class Reduction(nn.Module):
 
 
 class UnnamedModel(nn.Module):
-    def __init__(self, target_features_num=570, drug_features_num=200, num_features_cell=890, hidden_channels=768,
-                 dropout=0.2, num_layers=1):
+    def __init__(self,args):
         super().__init__()
 
         # gnn
-        self.gnn = HeteroGNNs(num_layers=num_layers)
+        self.gnn = HeteroGNNs(args)
 
         # get cell features
-        self.reduction = Reduction(num_features_cell, hidden_channels * 2, dropout=dropout)
+        self.reduction = Reduction(args.cell_features_num, args.hidden_channels * 2, args)
 
         # final transform
-        self.reduction2 = Reduction(hidden_channels * 4, hidden_channels, dropout=dropout)
+        self.reduction2 = Reduction(args.hidden_channels * 4, args.hidden_channels, args)
 
         # output layer
-        self.classfier = nn.Linear(hidden_channels, 2)
+        self.classfier = nn.Linear(args.hidden_channels, 2)
 
-        self.mask_target = nn.parameter.Parameter(nn.init.xavier_uniform_(torch.empty(1, target_features_num)).float())
-        self.mask_drug = nn.parameter.Parameter(nn.init.xavier_uniform_(torch.empty(1, drug_features_num)).float())
+        self.mask_target = nn.parameter.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.target_features_num)).float())
+        self.mask_drug = nn.parameter.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.drug_features_num)).float())
 
     def forward(self, drug1_id, drug2_id, cell_features, x_dict, egde_index_dict):
         x_dict = self.gnn(x_dict, egde_index_dict)

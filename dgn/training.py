@@ -30,30 +30,44 @@ def get_args(args):
         description="Train a model.",
         usage="training.py [<args>] [-h | --help]"
     )
-
+    # ------------- Train ------------------------
     parser.add_argument("--train_batch_size", type=int, default=128, help="train batch size")
     parser.add_argument("--test_batch_size", type=int, default=128, help="test batch size")
     parser.add_argument("--lr", type=float, default=1e-5, help="Path to pre-trained checkpoint.")
     parser.add_argument("--epochs", type=int, default=200, help="epoch for train")
     parser.add_argument("--device", type=str, default="0", help="device")
     parser.add_argument("--log_step", type=int, default=20, help="when to print log")
+
+    # ------------- Data ------------------------
     parser.add_argument("--data", type=str, default="../data/processed/fold_data/", help="training data with labels(.csv)")
     parser.add_argument("--fold", type=int, default=1, help="k-fold training index")
-    parser.add_argument("--f_drug", type=str, default="../data/raw/Feature_DRUG.csv", help="drug features file(.csv)")
-    parser.add_argument("--f_target", type=str, default="../data/raw/Feature_TAR.csv", help="target features file(.csv)")
-    parser.add_argument("--f_cell", type=str, default="../data/raw/Feature_CELL.csv", help="cell features file(.csv)")
+    parser.add_argument("--f_drug", type=str, default="../data/processed/feature/Feature_DRUG.csv", help="drug features file(.csv)")
+    parser.add_argument("--f_target", type=str, default="../data/processed/feature/Feature_TAR.csv", help="target features file(.csv)")
+    parser.add_argument("--f_cell", type=str, default="../data/processed/feature/Feature_CELL.csv", help="cell features file(.csv)")
     parser.add_argument("--dd_edge", type=str, default="../data/processed/edge_index/drug_drug_edge_index.txt", help="drug-drug edge index file(.txt)")
     parser.add_argument("--dt_edge", type=str, default="../data/processed/edge_index/drug_tar_edge_index.txt", help="drug-target edge index file(.txt)")
     parser.add_argument("--tt_edge", type=str, default="../data/processed/edge_index/tar_tar_edge_index.txt", help="target-target edge index file(.txt)")
     parser.add_argument("--dd_att", type=str, default="../data/processed/edge_att/drug_drug_edge_att.txt", help="drug-drug edge attribute file(.txt)")
     parser.add_argument("--drug_vocab", type=str, default="../data/processed/vocab/drug_vocab.txt", help="drug encoded file(.txt)")
     parser.add_argument("--output", type=str, default="../data/result/", help="output file fold")
+    parser.add_argument("--num_workers", type=int, default=4, help="dataloader num_workers")
+
+    parser.add_argument("--target_features_num", type=int, default=570, help="target features num")
+    parser.add_argument("--drug_features_num", type=int, default=188, help="drug features num")
+    parser.add_argument("--cell_features_num", type=int, default=890, help="cell features num")
+
+    # ------------- Model ------------------------
     parser.add_argument("--target_net_update", type=float, default=0.996, help="leaving ratio of target_model")
     parser.add_argument("--mask_ratio", type=float, default=0.1, help="mae mask ratio")
     parser.add_argument("--kl", type=float, default=1.0, help="kl loss ratio")
     parser.add_argument("--mae", type=float, default=0.1, help="mae loss ratio")
-    parser.add_argument("--num_workers", type=int, default=4, help="dataloader num_workers")
     parser.add_argument("--setting", type=int, default=3, help="train type")
+
+    parser.add_argument("--num_layers", type=int, default=1, help="gnn layer num")
+    parser.add_argument("--hidden_channels", type=int, default=768, help="hidden channels in model")
+    parser.add_argument("--dropout", type=float, default=0.2, help="dropout weight")
+    parser.add_argument("--project1", type=int, default=2048, help="hidden channels in reduction 1st Linear")
+    parser.add_argument("--project2", type=int, default=512, help="hidden channels in reduction 2nd Linear")
 
     args = parser.parse_args(args)
 
@@ -63,6 +77,8 @@ def get_args(args):
     timestr = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     os.mkdir(args.output + timestr)
     args.output = args.output + timestr + "/"
+
+    args.multi_model_settings = [2, 3]
 
     return args
 
@@ -119,7 +135,7 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
         loss.backward()
         optimizer.step()
 
-        if not args.setting == 1 and not args.setting == 4:
+        if args.setting in args.multi_model_settings:
             update_target_network_parameters(online_model, target_model, args.target_net_update)
 
         if batch_idx % args.log_step == 0:
@@ -132,6 +148,9 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
 
 
 def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict):
+    """
+    need update args.multi_model_settings
+    """
     loss_print = ""
     loss = torch.inf
     # single model
@@ -222,7 +241,6 @@ def main(args=None):
     for k, v in sorted(vars(args).items()):
         print(k, '=', v)
 
-
     # ----------- Data Prepare ---------------------------------------------------
     train_path = args.data + "fold_" + str(args.fold) + "_train.csv"
     test_path = args.data + "fold_" + str(args.fold) + "_test.csv"
@@ -244,13 +262,20 @@ def main(args=None):
 
     # ----------- Model Prepare ---------------------------------------------------
     modeling = UnnamedModel
-    online_model = modeling().to(device)
-    target_model = modeling().to(device)
-    initializes_target_network(online_model, target_model)
+    online_model = modeling(args).to(device)
+
+    if args.setting in args.multi_model_settings:
+        target_model = modeling(args).to(device)
+        initializes_target_network(online_model, target_model)
+    else:
+        target_model = None
+
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(online_model.parameters(), lr=args.lr)
     # 学习率调整器，检测准确率的状态，然后衰减学习率
     scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, min_lr=1e-7, patience=5, verbose=True, threshold=0.0001, eps=1e-08)
+
+    print("model:", online_model)
 
     # ----------- Output Prepare ---------------------------------------------------
     model_file_name = args.output + str(args.fold) + '--model.model'
