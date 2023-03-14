@@ -295,10 +295,10 @@ def main(args=None):
         f.write(AUCs + '\n')
 
     # ----------- Training ---------------------------------------------------
+
     online_model, optimizer, loader_train, loader_test, scheduler = accelerator.prepare(online_model, optimizer, loader_train, loader_test, scheduler)
     if args.setting in args.multi_model_settings:
-        online_model, target_model, optimizer, loader_train, loader_test, scheduler = accelerator.prepare(online_model, target_model, optimizer, loader_train, loader_test, scheduler
-                                                                                                                    )
+        online_model, target_model, optimizer, loader_train, loader_test, scheduler = accelerator.prepare(online_model, target_model, optimizer, loader_train, loader_test, scheduler)
 
     best_auc = 0
     epochs = args.epochs
