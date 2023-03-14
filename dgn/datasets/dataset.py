@@ -14,12 +14,13 @@ import re
 # graph data creating
 # Heterogeneous graph
 def create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_edge_index, dd_edge_att, device):
-    drug_feature = drug_feature.to(device)
-    target_feature = target_feature.to(device)
-    dd_edge_index = dd_edge_index.to(device)
-    dt_edge_index = dt_edge_index.to(device)
-    tt_edge_index = tt_edge_index.to(device)
-    dd_edge_att = dd_edge_att.to(device)
+    # drug_feature = drug_feature.to(device)
+    # target_feature = target_feature.to(device)
+    # dd_edge_index = dd_edge_index.to(device)
+    # dt_edge_index = dt_edge_index.to(device)
+    # tt_edge_index = tt_edge_index.to(device)
+    # dd_edge_att = dd_edge_att.to(device)
+
 
     data = HeteroData()
 

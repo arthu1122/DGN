@@ -22,6 +22,8 @@ from utils.ema import initializes_target_network, update_target_network_paramete
 from utils.mae import get_mask_x_dict, get_mae_loss
 from models.gat import UnnamedModel
 
+from accelerate import Accelerator
+
 torch.set_printoptions(threshold=np.inf)
 
 
@@ -84,7 +86,7 @@ def get_args(args):
 
 
 def predict(model, device, loader_test, graph_data):
-    model.to(device)
+    # model.to(device)
     model.eval()
 
     with torch.no_grad():
@@ -93,12 +95,12 @@ def predict(model, device, loader_test, graph_data):
         total_predlabels = torch.Tensor()
         print('Make prediction for {} samples...'.format(len(loader_test.dataset)))
 
-        for step, data in tqdm(enumerate(loader_test), desc='Dev Itreation:'):
+        for step, data in enumerate(loader_test):
             print("Dev Step[{}/{}]".format(step + 1, len(loader_test)))
 
             drug1_ids, drug2_ids, cell_features, labels = data
-            cell_features = cell_features.to(device)
-            labels = labels.to(device)
+            # cell_features = cell_features.to(device)
+            # labels = labels.to(device)
 
             x_dict = graph_data.collect('x')
             edge_index_dict = graph_data.collect('edge_index')
@@ -116,23 +118,24 @@ def predict(model, device, loader_test, graph_data):
     return total_labels.numpy().flatten(), total_preds.numpy().flatten(), total_predlabels.numpy().flatten()
 
 
-def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, epoch, target_model, args):
-    online_model.to(device)
+def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, epoch, target_model, accelerator, args):
+    # online_model.to(device)
     online_model.train()
     for batch_idx, data in enumerate(loader_train):
         # start_time = time.time()
 
         drug1_ids, drug2_ids, cell_features, labels = data
 
-        cell_features = cell_features.to(device)
-        labels = labels.to(device)
+        # cell_features = cell_features.to(device)
+        # labels = labels.to(device)
 
         optimizer.zero_grad()
         x_dict = graph_data.collect('x')
         edge_index_dict = graph_data.collect('edge_index')
         loss, loss_print = get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict)
 
-        loss.backward()
+        accelerator.backward(loss)
+
         optimizer.step()
 
         if args.setting in args.multi_model_settings:
@@ -230,6 +233,7 @@ def main(args=None):
     args = get_args(args)
 
     # CPU or GPU
+    accelerator = Accelerator()
     if torch.cuda.is_available():
         device_index = 'cuda:' + args.device
         device = torch.device(device_index)
@@ -262,10 +266,12 @@ def main(args=None):
 
     # ----------- Model Prepare ---------------------------------------------------
     modeling = UnnamedModel
-    online_model = modeling(args).to(device)
+    # online_model = modeling(args).to(device)
+    online_model = modeling(args)
 
     if args.setting in args.multi_model_settings:
-        target_model = modeling(args).to(device)
+        # target_model = modeling(args).to(device)
+        target_model = modeling(args)
         initializes_target_network(online_model, target_model)
     else:
         target_model = None
@@ -285,16 +291,21 @@ def main(args=None):
     with open(file_AUCs, 'w') as f:
         for k, v in sorted(vars(args).items()):
             f.write(str(k) + '=' + str(v) + "\n")
-        f.write(str(online_model)+'\n')
+        f.write(str(online_model) + '\n')
         f.write(AUCs + '\n')
 
     # ----------- Training ---------------------------------------------------
+    online_model, optimizer, loader_train, loader_test, scheduler, graph_data = accelerator.prepare(online_model, optimizer, loader_train, loader_test, scheduler, graph_data)
+    if args.setting in args.multi_model_settings:
+        online_model, target_model, optimizer, loader_train, loader_test, scheduler, graph_data = accelerator.prepare(online_model, target_model, optimizer, loader_train, loader_test, scheduler,
+                                                                                                                      graph_data)
+
     best_auc = 0
     epochs = args.epochs
     print('Training begin!')
     for epoch in range(epochs):
         # TODO
-        train(device, graph_data, loader_train, loss_fn, online_model, optimizer, epoch, target_model, args)
+        train(device, graph_data, loader_train, loss_fn, online_model, optimizer, epoch, target_model, accelerator, args)
 
         # T is correct label
         # S is predict score
