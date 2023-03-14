@@ -25,8 +25,6 @@ from models.gat import UnnamedModel
 torch.set_printoptions(threshold=np.inf)
 
 
-
-
 def get_args(args):
     parser = argparse.ArgumentParser(
         description="Train a model.",
@@ -39,7 +37,8 @@ def get_args(args):
     parser.add_argument("--epochs", type=int, default=200, help="epoch for train")
     parser.add_argument("--device", type=str, default="0", help="device")
     parser.add_argument("--log_step", type=int, default=20, help="when to print log")
-    parser.add_argument("--data", type=str, default="../data/processed/Shuffled_Label_Data.csv", help="training data with labels(.csv)")
+    parser.add_argument("--data", type=str, default="../data/processed/fold_data/", help="training data with labels(.csv)")
+    parser.add_argument("--fold", type=int, default=1, help="k-fold training index")
     parser.add_argument("--f_drug", type=str, default="../data/raw/Feature_DRUG.csv", help="drug features file(.csv)")
     parser.add_argument("--f_target", type=str, default="../data/raw/Feature_TAR.csv", help="target features file(.csv)")
     parser.add_argument("--f_cell", type=str, default="../data/raw/Feature_CELL.csv", help="cell features file(.csv)")
@@ -109,12 +108,8 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
 
         drug1_ids, drug2_ids, cell_features, labels = data
 
-
-
         cell_features = cell_features.to(device)
         labels = labels.to(device)
-
-        print("{} {}".format("cell_features = ", cell_features.device))
 
         optimizer.zero_grad()
         x_dict = graph_data.collect('x')
@@ -190,7 +185,7 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
 
 # get batch
 def batch_collate(batch):
-    start_time=time.time()
+    start_time = time.time()
 
     drug1_ids = []
     drug2_ids = []
@@ -224,94 +219,87 @@ def main(args=None):
         device = torch.device('cpu')
         print('The code uses CPU!!!')
 
-    print(args)
+    print("setting: " + str(args.setting))
+    print("fold:" + str(args.fold))
 
-    data_df = pd.read_csv(args.data)
+    # ----------- Data Prepare ---------------------------------------------------
+    train_path = args.data + "fold_" + str(args.fold) + "_train.csv"
+    test_path = args.data + "fold_" + str(args.fold) + "_test.csv"
+    train_data = pd.read_csv(train_path)
+    test_data = pd.read_csv(test_path)
+
     features_cell = pd.read_csv(args.f_cell, index_col='Cell_Line_Name', dtype=str)
+
     graph_data = get_graph_data(features_drug_file=args.f_drug, features_target_file=args.f_target, e_dd_index_file=args.dd_edge,
                                 e_dt_index_file=args.dt_edge, e_tt_index_file=args.tt_edge, e_dd_att_file=args.dd_att, device=device)
 
-    lenth = len(data_df)
-    pot = int(lenth / 5)
-    print('lenth', lenth)
-    print('pot', pot)
-    random_num = random.sample(range(0, lenth), lenth)
+    data_train = GNNDataset(label_df=train_data, vocab_file=args.drug_vocab, features_cell_df=features_cell)
+    data_test = GNNDataset(label_df=test_data, vocab_file=args.drug_vocab, features_cell_df=features_cell)
 
+    loader_train = DataLoader(data_train, batch_size=args.train_batch_size, shuffle=None, collate_fn=batch_collate,
+                              num_workers=args.num_workers, pin_memory=True)
+    loader_test = DataLoader(data_test, batch_size=args.test_batch_size, shuffle=None, collate_fn=batch_collate,
+                             num_workers=args.num_workers, pin_memory=True)
+
+    # ----------- Model Prepare ---------------------------------------------------
     modeling = UnnamedModel
+    online_model = modeling().to(device)
+    target_model = modeling().to(device)
+    initializes_target_network(online_model, target_model)
+    loss_fn = nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(online_model.parameters(), lr=args.lr)
+    # 学习率调整器，检测准确率的状态，然后衰减学习率
+    scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, min_lr=1e-7, patience=5, verbose=True, threshold=0.0001, eps=1e-08)
 
-    for i in range(5):
+    # ----------- Output Prepare ---------------------------------------------------
+    model_file_name = args.output + str(args.fold) + '--model.model'
+    file_AUCs = args.output + str(args.fold) + '--AUCs.txt'
+    AUCs = "%-10s%-15s%-15s%-15s%-15s%-15s%-15s%-15s%-15s" % ('Epoch', 'AUC_dev', 'PR_AUC', 'ACC', 'BACC', 'PREC', 'TPR', 'KAPPA', 'RECALL')
+    # AUCs = 'Epoch\tAUC_dev\tPR_AUC\tACC\tBACC\tPREC\tTPR\tKAPPA\tRECALL'
+    with open(file_AUCs, 'w') as f:
+        f.write(str(args) + "\n")
+        f.write(AUCs + '\n')
 
-        online_model = modeling().to(device)
-        target_model = modeling().to(device)
+    # ----------- Training ---------------------------------------------------
+    best_auc = 0
+    epochs = args.epochs
+    print('Training begin!')
+    for epoch in range(epochs):
+        # TODO
+        train(device, graph_data, loader_train, loss_fn, online_model, optimizer, epoch, target_model, args)
 
-        initializes_target_network(online_model, target_model)
+        # T is correct label
+        # S is predict score
+        # Y is predict label
 
-        loss_fn = nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(online_model.parameters(), lr=args.lr)
-        # 学习率调整器，检测准确率的状态，然后衰减学习率
-        scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, min_lr=1e-7, patience=5, verbose=True, threshold=0.0001, eps=1e-08)
+        T, S, Y = predict(online_model, device, loader_test, graph_data)
 
-        test_num = random_num[pot * i:pot * (i + 1)]
-        train_num = random_num[:pot * i] + random_num[pot * (i + 1):]
+        # compute preformence
+        AUC = roc_auc_score(T, S)
+        precision, recall, threshold = metrics.precision_recall_curve(T, S)
+        PR_AUC = metrics.auc(recall, precision)
+        BACC = balanced_accuracy_score(T, Y)
+        tn, fp, fn, tp = confusion_matrix(T, Y).ravel()
+        TPR = tp / (tp + fn)
+        PREC = precision_score(T, Y)
+        ACC = accuracy_score(T, Y)
+        KAPPA = cohen_kappa_score(T, Y)
+        recall = recall_score(T, Y)
 
-        data_train = GNNDataset(label_df=data_df.iloc[train_num], vocab_file=args.drug_vocab, features_cell_df=features_cell)
-        data_test = GNNDataset(label_df=data_df.iloc[test_num], vocab_file=args.drug_vocab, features_cell_df=features_cell)
+        # save data
+        if best_auc < AUC:
+            best_auc = AUC
+            # AUCs = [epoch, AUC, PR_AUC, ACC, BACC, PREC, TPR, KAPPA, recall]
+            AUCs = "%-10d%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f" % (epoch, AUC, PR_AUC, ACC, BACC, PREC, TPR, KAPPA, recall)
 
-        loader_train = DataLoader(data_train, batch_size=args.train_batch_size, shuffle=None, collate_fn=batch_collate,
-                                  num_workers=args.num_workers, pin_memory=True)
-        loader_test = DataLoader(data_test, batch_size=args.test_batch_size, shuffle=None, collate_fn=batch_collate,
-                                 num_workers=args.num_workers, pin_memory=True)
+            with open(file_AUCs, 'a') as f:
+                f.write(AUCs + '\n')
 
-        model_file_name = args.output + str(i) + '--model.model'
-        file_AUCs = args.output + str(i) + '--AUCs.txt'
-        AUCs = "%-10s%-15s%-15s%-15s%-15s%-15s%-15s%-15s%-15s" % ('Epoch', 'AUC_dev', 'PR_AUC', 'ACC', 'BACC', 'PREC', 'TPR', 'KAPPA', 'RECALL')
-        # AUCs = 'Epoch\tAUC_dev\tPR_AUC\tACC\tBACC\tPREC\tTPR\tKAPPA\tRECALL'
-        with open(file_AUCs, 'w') as f:
-            f.write(str(args) + "\n")
-            f.write(AUCs + '\n')
+            torch.save(online_model.state_dict(), model_file_name)
 
-        best_auc = 0
-        epochs = args.epochs
+        print('best_auc', best_auc)
 
-        print('Training begin!')
-        for epoch in range(epochs):
-            # TODO
-            train(device, graph_data, loader_train, loss_fn, online_model, optimizer, epoch, target_model, args)
-
-            # T is correct label
-            # S is predict score
-            # Y is predict label
-
-
-            T, S, Y = predict(online_model, device, loader_test, graph_data)
-
-
-            # compute preformence
-            AUC = roc_auc_score(T, S)
-            precision, recall, threshold = metrics.precision_recall_curve(T, S)
-            PR_AUC = metrics.auc(recall, precision)
-            BACC = balanced_accuracy_score(T, Y)
-            tn, fp, fn, tp = confusion_matrix(T, Y).ravel()
-            TPR = tp / (tp + fn)
-            PREC = precision_score(T, Y)
-            ACC = accuracy_score(T, Y)
-            KAPPA = cohen_kappa_score(T, Y)
-            recall = recall_score(T, Y)
-
-            # save data
-            if best_auc < AUC:
-                best_auc = AUC
-                # AUCs = [epoch, AUC, PR_AUC, ACC, BACC, PREC, TPR, KAPPA, recall]
-                AUCs = "%-10d%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f" % (epoch, AUC, PR_AUC, ACC, BACC, PREC, TPR, KAPPA, recall)
-
-                with open(file_AUCs, 'a') as f:
-                    f.write(AUCs + '\n')
-
-                torch.save(online_model.state_dict(), model_file_name)
-
-            print('best_auc', best_auc)
-
-        scheduler.step(best_auc)
+    scheduler.step(best_auc)
 
 
 if __name__ == '__main__':
