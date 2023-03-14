@@ -17,7 +17,7 @@ class HeteroGNNs(nn.Module):
                 ('drug', 'd-d', 'drug'): GATConv(args.drug_features_num, args.hidden_channels, add_self_loops=False),
                 ('drug', 'd-t', 'target'): GATConv((args.drug_features_num, args.target_features_num), args.hidden_channels, add_self_loops=False),
                 ('target', 'rev_d-t', 'drug'): GATConv((args.target_features_num, args.drug_features_num), args.hidden_channels, add_self_loops=False),
-                ('target', 't-t', 'target'): GATConv(args.target_features_num, args.hidden_channels,  add_self_loops=False),
+                ('target', 't-t', 'target'): GATConv(args.target_features_num, args.hidden_channels, add_self_loops=False),
             }, aggr='sum')
             self.convs.append(conv)
 
@@ -64,8 +64,9 @@ class UnnamedModel(nn.Module):
         # output layer
         self.classfier = nn.Linear(args.hidden_channels, 2)
 
-        self.mask_target = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.target_features_num)).float())
-        self.mask_drug = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.drug_features_num)).float())
+        if args.setting != 1:
+            self.mask_target = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.target_features_num)).float())
+            self.mask_drug = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.drug_features_num)).float())
 
         self.params = nn.ParameterDict({
             'mask_target': self.mask_target,
@@ -91,4 +92,3 @@ class UnnamedModel(nn.Module):
 
     def get_mask(self):
         return self.mask_drug, self.mask_target
-
