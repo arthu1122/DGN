@@ -104,7 +104,7 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
     online_model.to(device)
     online_model.train()
     for batch_idx, data in enumerate(loader_train):
-        start_time = time.time()
+        # start_time = time.time()
 
         drug1_ids, drug2_ids, cell_features, labels = data
 
@@ -126,9 +126,9 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
             print("[Train] {} Epoch[{}/{}] step[{}/{}] ".format(
                 datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, args.epochs, batch_idx + 1, len(loader_train)) + loss_print)
 
-        end_time = time.time()
-        run_time = end_time - start_time
-        print("{} {}s".format("a batch", run_time))
+        # end_time = time.time()
+        # run_time = end_time - start_time
+        # print("{} {}s".format("a batch", run_time))
 
 
 def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict):
@@ -185,7 +185,7 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
 
 # get batch
 def batch_collate(batch):
-    start_time = time.time()
+    # start_time = time.time()
 
     drug1_ids = []
     drug2_ids = []
@@ -200,9 +200,9 @@ def batch_collate(batch):
     cell_features = torch.concat(cell_features)
     labels = torch.tensor(labels)
 
-    end_time = time.time()
-    run_time = end_time - start_time
-    print("{} {}s".format("collate", run_time))
+    # end_time = time.time()
+    # run_time = end_time - start_time
+    # print("{} {}s".format("collate", run_time))
 
     return drug1_ids, drug2_ids, cell_features, labels
 
@@ -219,8 +219,9 @@ def main(args=None):
         device = torch.device('cpu')
         print('The code uses CPU!!!')
 
-    print("setting: " + str(args.setting))
-    print("fold:" + str(args.fold))
+    for k, v in sorted(vars(args).items()):
+        print(k, '=', v)
+
 
     # ----------- Data Prepare ---------------------------------------------------
     train_path = args.data + "fold_" + str(args.fold) + "_train.csv"
