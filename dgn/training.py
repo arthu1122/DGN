@@ -283,7 +283,9 @@ def main(args=None):
     AUCs = "%-10s%-15s%-15s%-15s%-15s%-15s%-15s%-15s%-15s" % ('Epoch', 'AUC_dev', 'PR_AUC', 'ACC', 'BACC', 'PREC', 'TPR', 'KAPPA', 'RECALL')
     # AUCs = 'Epoch\tAUC_dev\tPR_AUC\tACC\tBACC\tPREC\tTPR\tKAPPA\tRECALL'
     with open(file_AUCs, 'w') as f:
-        f.write(str(args) + "\n")
+        for k, v in sorted(vars(args).items()):
+            f.write(str(k) + '=' + str(v) + "\n")
+        f.write(str(online_model)+'\n')
         f.write(AUCs + '\n')
 
     # ----------- Training ---------------------------------------------------
