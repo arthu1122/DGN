@@ -190,7 +190,7 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
 
 # get batch
 def batch_collate(batch):
-
+    start_time=time.time()
 
     drug1_ids = []
     drug2_ids = []
@@ -205,6 +205,9 @@ def batch_collate(batch):
     cell_features = torch.concat(cell_features)
     labels = torch.tensor(labels)
 
+    end_time = time.time()
+    run_time = end_time - start_time
+    print("{} {}s".format("collate", run_time))
 
     return drug1_ids, drug2_ids, cell_features, labels
 

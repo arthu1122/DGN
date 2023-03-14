@@ -110,6 +110,8 @@ class GNNDataset(Dataset):
 
     def __getitem__(self, index):
 
+        start_time=time.time()
+
         index_data = self.data.iloc[index]
         cell_name, drug1, drug2 = index_data['Cell_Line_Name'], index_data['DrugID1'], index_data['DrugID2']
 
@@ -120,6 +122,10 @@ class GNNDataset(Dataset):
 
         cell_feature = list(self.features_cell.astype('float').loc[cell_name])
         cell_feature = torch.FloatTensor(cell_feature)
+
+        end_time = time.time()
+        run_time = end_time - start_time
+        print("{} {}s".format("get item", run_time))
 
         return drug1_id, drug2_id, cell_feature, self.label[index]
 
