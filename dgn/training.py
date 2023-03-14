@@ -132,7 +132,8 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
         optimizer.zero_grad()
         x_dict = graph_data.collect('x')
         edge_index_dict = graph_data.collect('edge_index')
-        loss, loss_print = get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict)
+        edge_attr_dict=graph_data.collect('edge_attr')
+        loss, loss_print = get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict,edge_attr_dict)
 
         accelerator.backward(loss)
 
@@ -150,7 +151,7 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
         # print("{} {}s".format("a batch", run_time))
 
 
-def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict):
+def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict,edge_attr_dict):
     """
     need update args.multi_model_settings
     """
@@ -158,15 +159,18 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
     loss = torch.inf
     # single model
     if args.setting == 1:
-        output, x_dict = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
+        output, x_dict = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict,edge_attr_dict)
         loss = loss_fn(output, labels)
         loss_print = "loss={:.6f}".format(loss.item())
     # MAE + EMA
     elif args.setting == 2:
-        mask_drug, mask_target = online_model.module.get_mask()
+        if torch.cuda.device_count() > 1:
+            mask_drug, mask_target=online_model.module.get_mask()
+        else:
+            mask_drug, mask_target = online_model.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
-        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict,edge_attr_dict)
+        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict,edge_attr_dict)
         loss0 = loss_fn(_output, labels)
 
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
@@ -175,11 +179,14 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
         loss_print = "loss={:.6f} [loss0={:.6f} loss_mae={:.6f}]".format(loss.item(), loss0.item(), loss_mae.item())
     # MAE + EMA + KL
     elif args.setting == 3:
-        mask_drug, mask_target = online_model.module.get_mask()
+        if torch.cuda.device_count() > 1:
+            mask_drug, mask_target=online_model.module.get_mask()
+        else:
+            mask_drug, mask_target = online_model.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
-        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
-        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict,edge_attr_dict)
+        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict,edge_attr_dict)
+        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict,edge_attr_dict)
         loss0 = loss_fn(_output, labels)
         loss1 = loss_fn(output1, labels)
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
@@ -189,10 +196,13 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
         loss = loss0 + loss1 + args.kl * loss_kl + args.mae * loss_mae
         loss_print = "loss={:.6f} [loss0={:.6f} loss1={:.6f} loss_kl={:.6f} loss_mae={:.6f}]".format(loss.item(), loss0.item(), loss1.item(), loss_kl.item(), loss_mae.item())
     elif args.setting == 4:
-        mask_drug, mask_target = online_model.module.get_mask()
+        if torch.cuda.device_count() > 1:
+            mask_drug, mask_target=online_model.module.get_mask()
+        else:
+            mask_drug, mask_target = online_model.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict)
-        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict,edge_attr_dict)
+        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict,edge_attr_dict)
         loss0 = loss_fn(_output, labels)
         loss1 = loss_fn(output1, labels)
 

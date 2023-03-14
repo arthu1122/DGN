@@ -21,9 +21,9 @@ class HeteroGNNs(nn.Module):
             }, aggr='sum')
             self.convs.append(conv)
 
-    def forward(self, x_dict, edge_index_dict):
+    def forward(self, x_dict, edge_index_dict,edge_attr_dict):
         for conv in self.convs:
-            x_dict = conv(x_dict, edge_index_dict)
+            x_dict = conv(x_dict, edge_index_dict,edge_attr_dict)
             x_dict = {key: x.relu() for key, x in x_dict.items()}
 
         return x_dict
@@ -73,8 +73,8 @@ class UnnamedModel(nn.Module):
             'mask_drug': self.mask_drug
         })
 
-    def forward(self, drug1_id, drug2_id, cell_features, x_dict, egde_index_dict):
-        x_dict = self.gnn(x_dict, egde_index_dict)
+    def forward(self, drug1_id, drug2_id, cell_features, x_dict, edge_index_dict, edge_attr_dict):
+        x_dict = self.gnn(x_dict, edge_index_dict, edge_attr_dict)
 
         # get drugs hidden_state
         drug1 = x_dict['drug'][drug1_id]

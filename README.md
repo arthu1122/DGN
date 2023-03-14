@@ -38,6 +38,15 @@ python -u training.py  > train.log
 4. 加r-drop
 5. 优化速度
 
+gnn.convs.0.convs.drug__d-t__target.lin_dst.weight, 
+gnn.convs.0.convs.drug__d-t__target.lin_src.weight, 
+gnn.convs.0.convs.drug__d-t__target.bias, 
+gnn.convs.0.convs.drug__d-t__target.att_dst, 
+gnn.convs.0.convs.drug__d-t__target.att_src, 
+gnn.convs.0.convs.target__t-t__target.att_src, 
+gnn.convs.0.convs.target__t-t__target.att_dst, 
+gnn.convs.0.convs.target__t-t__target.bias, 
+gnn.convs.0.convs.target__t-t__target.lin_src.weight
 
 
 
