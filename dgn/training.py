@@ -49,8 +49,8 @@ def get_args(args):
     parser.add_argument("--tt_edge", type=str, default="../data/processed/edge_index/tar_tar_edge_index.txt", help="target-target edge index file(.txt)")
     parser.add_argument("--dd_att", type=str, default="../data/processed/edge_att/drug_drug_edge_att.txt", help="drug-drug edge attribute file(.txt)")
     parser.add_argument("--drug_vocab", type=str, default="../data/processed/vocab/drug_vocab.txt", help="drug encoded file(.txt)")
-    parser.add_argument("--output", type=str, default="../data/result/", help="output file fold")
-    parser.add_argument("--num_workers", type=int, default=4, help="dataloader num_workers")
+    parser.add_argument("--output", type=str, default="../data/result/default/", help="output file fold")
+    parser.add_argument("--num_workers", type=int, default=0, help="dataloader num_workers")
 
     parser.add_argument("--target_features_num", type=int, default=570, help="target features num")
     parser.add_argument("--drug_features_num", type=int, default=188, help="drug features num")
@@ -74,9 +74,9 @@ def get_args(args):
     if not os.path.exists(args.output):
         os.mkdir(args.output)
 
-    timestr = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-    os.mkdir(args.output + timestr)
-    args.output = args.output + timestr + "/"
+    # timestr = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+    # os.mkdir(args.output + timestr)
+    # args.output = args.output + timestr + "/"
 
     args.multi_model_settings = [2, 3]
 
