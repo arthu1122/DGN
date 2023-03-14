@@ -254,7 +254,7 @@ def main(args=None):
     features_cell = pd.read_csv(args.f_cell, index_col='Cell_Line_Name', dtype=str)
 
     graph_data = get_graph_data(features_drug_file=args.f_drug, features_target_file=args.f_target, e_dd_index_file=args.dd_edge,
-                                e_dt_index_file=args.dt_edge, e_tt_index_file=args.tt_edge, e_dd_att_file=args.dd_att, device=device)
+                                e_dt_index_file=args.dt_edge, e_tt_index_file=args.tt_edge, e_dd_att_file=args.dd_att, device=accelerator.device)
 
     data_train = GNNDataset(label_df=train_data, vocab_file=args.drug_vocab, features_cell_df=features_cell)
     data_test = GNNDataset(label_df=test_data, vocab_file=args.drug_vocab, features_cell_df=features_cell)
@@ -295,10 +295,10 @@ def main(args=None):
         f.write(AUCs + '\n')
 
     # ----------- Training ---------------------------------------------------
-    online_model, optimizer, loader_train, loader_test, scheduler, graph_data = accelerator.prepare(online_model, optimizer, loader_train, loader_test, scheduler, graph_data)
+    online_model, optimizer, loader_train, loader_test, scheduler = accelerator.prepare(online_model, optimizer, loader_train, loader_test, scheduler)
     if args.setting in args.multi_model_settings:
-        online_model, target_model, optimizer, loader_train, loader_test, scheduler, graph_data = accelerator.prepare(online_model, target_model, optimizer, loader_train, loader_test, scheduler,
-                                                                                                                      graph_data)
+        online_model, target_model, optimizer, loader_train, loader_test, scheduler = accelerator.prepare(online_model, target_model, optimizer, loader_train, loader_test, scheduler
+                                                                                                                    )
 
     best_auc = 0
     epochs = args.epochs
