@@ -70,7 +70,7 @@ def get_args(args):
     parser.add_argument("--dropout", type=float, default=0.2, help="dropout weight")
     parser.add_argument("--project1", type=int, default=2048, help="hidden channels in reduction 1st Linear")
     parser.add_argument("--project2", type=int, default=512, help="hidden channels in reduction 2nd Linear")
-    parser.add_argument("--gnn",type=str,default='gcn',help="type of gnn")
+    parser.add_argument("--gnn",type=str,default='gat',help="type of gnn")
 
     args = parser.parse_args(args)
 
