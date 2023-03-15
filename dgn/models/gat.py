@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import HeteroConv, GATConv
+from torch_geometric.nn import HeteroConv, GATConv, GCNConv
 
 
 class HeteroGNNs(nn.Module):
@@ -12,18 +12,33 @@ class HeteroGNNs(nn.Module):
 
         # graph network
         self.convs = nn.ModuleList()
+
         for _ in range(self.num_layers):
-            conv = HeteroConv({
-                ('drug', 'd-d', 'drug'): GATConv(args.drug_features_num, args.hidden_channels, add_self_loops=False),
-                ('drug', 'd-t', 'target'): GATConv((args.drug_features_num, args.target_features_num), args.hidden_channels, add_self_loops=False),
-                ('target', 'rev_d-t', 'drug'): GATConv((args.target_features_num, args.drug_features_num), args.hidden_channels, add_self_loops=False),
-                ('target', 't-t', 'target'): GATConv(args.target_features_num, args.hidden_channels, add_self_loops=False),
-            }, aggr='sum')
+
+            if args.gnn == 'gcn':
+                conv = HeteroConv({
+                    ('drug', 'd-d', 'drug'): GCNConv(args.drug_features_num, args.hidden_channels, add_self_loops=False),
+                    ('drug', 'd-t', 'target'): GCNConv(args.drug_features_num, args.hidden_channels, add_self_loops=False),
+                    ('target', 'rev_d-t', 'drug'): GCNConv(args.target_features_num, args.hidden_channels, add_self_loops=False),
+                    ('target', 't-t', 'target'): GCNConv(args.target_features_num, args.hidden_channels, add_self_loops=False),
+                }, aggr='sum')
+            elif args.gnn == 'gat':
+                conv = HeteroConv({
+                    ('drug', 'd-d', 'drug'): GATConv(args.drug_features_num, args.hidden_channels, add_self_loops=False),
+                    ('drug', 'd-t', 'target'): GATConv((args.drug_features_num, args.target_features_num), args.hidden_channels, add_self_loops=False),
+                    ('target', 'rev_d-t', 'drug'): GATConv((args.target_features_num, args.drug_features_num), args.hidden_channels, add_self_loops=False),
+                    ('target', 't-t', 'target'): GATConv(args.target_features_num, args.hidden_channels, add_self_loops=False),
+                }, aggr='sum')
+
+            else:
+                raise NotImplementedError("GNN type not found")
+
+
             self.convs.append(conv)
 
-    def forward(self, x_dict, edge_index_dict,edge_attr_dict):
+    def forward(self, x_dict, edge_index_dict, edge_attr_dict):
         for conv in self.convs:
-            x_dict = conv(x_dict, edge_index_dict,edge_attr_dict)
+            x_dict = conv(x_dict, edge_index_dict, edge_attr_dict)
             x_dict = {key: x.relu() for key, x in x_dict.items()}
 
         return x_dict
