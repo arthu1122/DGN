@@ -106,8 +106,8 @@ def predict(model, device, loader_test, graph_data):
 
             x_dict = graph_data.collect('x')
             edge_index_dict = graph_data.collect('edge_index')
-
-            output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict)
+            edge_attr_dict = graph_data.collect('edge_attr')
+            output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict,edge_attr_dict)
 
             ys = F.softmax(output, 1).to('cpu').data.numpy()
 
