@@ -25,6 +25,7 @@ from models.model import UnnamedModel
 from accelerate import Accelerator
 
 torch.set_printoptions(threshold=np.inf)
+accelerator = Accelerator()
 
 
 def get_args(args):
@@ -38,7 +39,7 @@ def get_args(args):
     parser.add_argument("--lr", type=float, default=1e-5, help="Path to pre-trained checkpoint.")
     parser.add_argument("--epochs", type=int, default=200, help="epoch for train")
     parser.add_argument("--device", type=str, default="0", help="device")
-    parser.add_argument("--log_step", type=int, default=20, help="when to print log")
+    parser.add_argument("--log_step", type=int, default=20, help="when to accelerator.print log")
 
     # ------------- Data ------------------------
     parser.add_argument("--data", type=str, default="../data/processed/fold_data/", help="training data with labels(.csv)")
@@ -94,10 +95,10 @@ def predict(model, device, loader_test, graph_data):
         total_preds = torch.Tensor()
         total_labels = torch.Tensor()
         total_predlabels = torch.Tensor()
-        print('Make prediction for {} samples...'.format(len(loader_test.dataset)))
+        accelerator.print('Make prediction for {} samples...'.format(len(loader_test.dataset)))
 
         for step, data in enumerate(loader_test):
-            print("Dev Step[{}/{}]".format(step + 1, len(loader_test)))
+            accelerator.print("Dev Step[{}/{}]".format(step + 1, len(loader_test)))
 
             drug1_ids, drug2_ids, cell_features, labels = data
             # cell_features = cell_features.to(device)
@@ -142,21 +143,21 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
 
         for name, para in online_model.named_parameters():
             if para.grad == None:
-                print(name)
+                accelerator.print(name)
 
         # ls = [name for name, para in online_model.named_parameters() if para.grad == None]
-        # print(ls)
+        # accelerator.print(ls)
 
         if args.setting in args.multi_model_settings:
             update_target_network_parameters(online_model, target_model, args.target_net_update)
 
         if batch_idx % args.log_step == 0:
-            print("[Train] {} Epoch[{}/{}] step[{}/{}] ".format(
+            accelerator.print("[Train] {} Epoch[{}/{}] step[{}/{}] ".format(
                 datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, args.epochs, batch_idx + 1, len(loader_train)) + loss_print)
 
         # end_time = time.time()
         # run_time = end_time - start_time
-        # print("{} {}s".format("a batch", run_time))
+        # accelerator.print("{} {}s".format("a batch", run_time))
 
 
 def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict, edge_attr_dict):
@@ -242,7 +243,7 @@ def batch_collate(batch):
 
     # end_time = time.time()
     # run_time = end_time - start_time
-    # print("{} {}s".format("collate", run_time))
+    # accelerator.print("{} {}s".format("collate", run_time))
 
     return drug1_ids, drug2_ids, cell_features, labels
 
@@ -251,17 +252,17 @@ def main(args=None):
     args = get_args(args)
 
     # CPU or GPU
-    accelerator = Accelerator()
+
     if torch.cuda.is_available():
         device_index = 'cuda:' + args.device
         device = torch.device(device_index)
-        print('The code uses GPU...')
+        accelerator.print('The code uses GPU...')
     else:
         device = torch.device('cpu')
-        print('The code uses CPU!!!')
+        accelerator.print('The code uses CPU!!!')
 
     for k, v in sorted(vars(args).items()):
-        print(k, '=', v)
+        accelerator.print(k, '=', v)
 
     # ----------- Data Prepare ---------------------------------------------------
     train_path = args.data + "fold_" + str(args.fold) + "_train.csv"
@@ -300,7 +301,7 @@ def main(args=None):
     # 学习率调整器，检测准确率的状态，然后衰减学习率
     scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, min_lr=1e-7, patience=5, verbose=True, threshold=0.0001, eps=1e-08)
 
-    print("model:", online_model)
+    accelerator.print("model:", online_model)
 
     # ----------- Output Prepare ---------------------------------------------------
     model_file_name = args.output + str(args.fold) + '--model.model'
@@ -321,7 +322,7 @@ def main(args=None):
 
     best_auc = 0
     epochs = args.epochs
-    print('Training begin!')
+    accelerator.print('Training begin!')
     for epoch in range(epochs):
         # TODO
         train(device, graph_data, loader_train, loss_fn, online_model, optimizer, epoch, target_model, accelerator, args)
@@ -355,7 +356,7 @@ def main(args=None):
 
             torch.save(online_model.state_dict(), model_file_name)
 
-        print('best_auc', best_auc)
+        accelerator.print('best_auc', best_auc)
 
     scheduler.step(best_auc)
 
