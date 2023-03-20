@@ -76,7 +76,7 @@ def get_args(args):
     args = parser.parse_args(args)
 
     if not os.path.exists(args.output):
-        os.mkdir(args.output)
+        os.mkdir(args.output[:-1])
 
     # timestr = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
     # os.mkdir(args.output + timestr)
