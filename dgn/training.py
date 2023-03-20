@@ -20,7 +20,7 @@ from tqdm import tqdm
 from datasets.dataset import GNNDataset, get_graph_data
 from utils.ema import initializes_target_network, update_target_network_parameters
 from utils.mae import get_mask_x_dict, get_mae_loss
-from models.gat import UnnamedModel
+from models.model import UnnamedModel
 
 from accelerate import Accelerator
 
@@ -70,7 +70,7 @@ def get_args(args):
     parser.add_argument("--dropout", type=float, default=0.2, help="dropout weight")
     parser.add_argument("--project1", type=int, default=2048, help="hidden channels in reduction 1st Linear")
     parser.add_argument("--project2", type=int, default=512, help="hidden channels in reduction 2nd Linear")
-    parser.add_argument("--gnn",type=str,default='gat',help="type of gnn")
+    parser.add_argument("--gnn", type=str, default='gat', help="type of gnn")
 
     args = parser.parse_args(args)
 
@@ -139,6 +139,13 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
         accelerator.backward(loss)
 
         optimizer.step()
+
+        for name, para in online_model.named_parameters():
+            if para.grad == None:
+                print(name)
+
+        # ls = [name for name, para in online_model.named_parameters() if para.grad == None]
+        # print(ls)
 
         if args.setting in args.multi_model_settings:
             update_target_network_parameters(online_model, target_model, args.target_net_update)
@@ -266,6 +273,7 @@ def main(args=None):
 
     graph_data = get_graph_data(features_drug_file=args.f_drug, features_target_file=args.f_target, e_dd_index_file=args.dd_edge,
                                 e_dt_index_file=args.dt_edge, e_tt_index_file=args.tt_edge, e_dd_att_file=args.dd_att, device=accelerator.device)
+    graph_data.to(accelerator.device)
 
     data_train = GNNDataset(label_df=train_data, vocab_file=args.drug_vocab, features_cell_df=features_cell)
     data_test = GNNDataset(label_df=test_data, vocab_file=args.drug_vocab, features_cell_df=features_cell)

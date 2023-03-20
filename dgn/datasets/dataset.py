@@ -14,13 +14,6 @@ import re
 # graph data creating
 # Heterogeneous graph
 def create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_edge_index, dd_edge_att, device):
-    drug_feature = drug_feature.to(device)
-    target_feature = target_feature.to(device)
-    dd_edge_index = dd_edge_index.to(device)
-    dt_edge_index = dt_edge_index.to(device)
-    tt_edge_index = tt_edge_index.to(device)
-    dd_edge_att = dd_edge_att.to(device)
-
 
     data = HeteroData()
 
@@ -32,8 +25,8 @@ def create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_e
     data['target', 't-t', 'target'].edge_index = tt_edge_index
 
     data['drug', 'd-d', 'drug'].edge_attr = torch.unsqueeze(dd_edge_att, -1)  # [num_edges_d-d, num_features_d-d]
-    data['drug', 'd-t', 'target'].edge_attr = torch.ones([dt_edge_index.shape[-1], 1], device=device)
-    data['target', 't-t', 'target'].edge_attr = torch.ones([tt_edge_index.shape[-1], 1], device=device)
+    data['drug', 'd-t', 'target'].edge_attr = torch.ones([dt_edge_index.shape[-1], 1])
+    data['target', 't-t', 'target'].edge_attr = torch.ones([tt_edge_index.shape[-1], 1])
 
     # undirect edge
     data = T.ToUndirected()(data)

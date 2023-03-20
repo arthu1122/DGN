@@ -11,35 +11,46 @@ class HeteroGNNs(nn.Module):
         self.num_layers = args.num_layers
 
         # graph network
-        self.convs = nn.ModuleList()
+        # self.convs = nn.ModuleList()
 
-        for _ in range(self.num_layers):
+        self.tt = GATConv(args.target_features_num, args.hidden_channels, add_self_loops=False)
+        self.dt = GATConv((args.drug_features_num, args.target_features_num), args.hidden_channels, add_self_loops=False)
+        self.dd = GATConv(args.drug_features_num, args.hidden_channels, add_self_loops=False)
 
-            if args.gnn == 'gcn':
-                conv = HeteroConv({
-                    ('drug', 'd-d', 'drug'): GCNConv(args.drug_features_num, args.hidden_channels, add_self_loops=False),
-                    ('drug', 'd-t', 'target'): GCNConv(args.drug_features_num, args.hidden_channels, add_self_loops=False),
-                    ('target', 'rev_d-t', 'drug'): GCNConv(args.target_features_num, args.hidden_channels, add_self_loops=False),
-                    ('target', 't-t', 'target'): GCNConv(args.target_features_num, args.hidden_channels, add_self_loops=False),
-                }, aggr='sum')
-            elif args.gnn == 'gat':
-                conv = HeteroConv({
-                    ('drug', 'd-d', 'drug'): GATConv(args.drug_features_num, args.hidden_channels, add_self_loops=False),
-                    ('drug', 'd-t', 'target'): GATConv((args.drug_features_num, args.target_features_num), args.hidden_channels, add_self_loops=False),
-                    ('target', 'rev_d-t', 'drug'): GATConv((args.target_features_num, args.drug_features_num), args.hidden_channels, add_self_loops=False),
-                    ('target', 't-t', 'target'): GATConv(args.target_features_num, args.hidden_channels, add_self_loops=False),
-                }, aggr='sum')
+        self.td = GATConv((args.hidden_channels, args.drug_features_num), args.hidden_channels, add_self_loops=False)
 
-            else:
-                raise NotImplementedError("GNN type not found")
+        # for _ in range(self.num_layers):
+        #     if args.gnn == 'gat':
+        #         conv = HeteroConv({
+        #
+        #             ('target', 't-t', 'target'): GATConv(args.target_features_num, args.hidden_channels, add_self_loops=False),
+        #             ('drug', 'd-t', 'target'): GATConv((args.drug_features_num, args.target_features_num), args.hidden_channels, add_self_loops=False),
+        #             ('drug', 'd-d', 'drug'): GATConv(args.drug_features_num, args.hidden_channels, add_self_loops=False),
+        #             ('target', 'rev_d-t', 'drug'): GATConv((args.target_features_num, args.drug_features_num), args.hidden_channels, add_self_loops=False),
+        #
+        #         }, aggr='sum')
+        #
+        #     else:
+        #         raise NotImplementedError("GNN type not found")
 
-
-            self.convs.append(conv)
+            # self.convs.append(conv)
 
     def forward(self, x_dict, edge_index_dict, edge_attr_dict):
-        for conv in self.convs:
-            x_dict = conv(x_dict, edge_index_dict, edge_attr_dict)
-            x_dict = {key: x.relu() for key, x in x_dict.items()}
+        # for conv in self.convs:
+        #     x_dict = conv(x_dict, edge_index_dict, edge_attr_dict)
+        #     x_dict = {key: x.relu() for key, x in x_dict.items()}
+
+        x_tt = self.tt((x_dict['target'], x_dict['target']), edge_index_dict[('target', 't-t', 'target')])
+        x_dt = self.dt((x_dict['drug'], x_dict['target']), edge_index_dict[('drug', 'd-t', 'target')])
+
+        x_target = (x_tt + x_dt) / 2
+        x_dict['target'] = x_target
+
+        x_dd = self.dd((x_dict['drug'], x_dict['drug']), edge_index_dict[('drug', 'd-d', 'drug')])
+        x_td = self.td((x_dict['target'], x_dict['drug']), edge_index_dict[('target', 'rev_d-t', 'drug')])
+
+        x_drug = (x_dd + x_td) / 2
+        x_dict['drug'] = x_drug
 
         return x_dict
 
@@ -82,11 +93,6 @@ class UnnamedModel(nn.Module):
         if args.setting != 1:
             self.mask_target = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.target_features_num)).float())
             self.mask_drug = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.drug_features_num)).float())
-
-        self.params = nn.ParameterDict({
-            'mask_target': self.mask_target,
-            'mask_drug': self.mask_drug
-        })
 
     def forward(self, drug1_id, drug2_id, cell_features, x_dict, edge_index_dict, edge_attr_dict):
         x_dict = self.gnn(x_dict, edge_index_dict, edge_attr_dict)
