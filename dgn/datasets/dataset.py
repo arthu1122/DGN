@@ -98,8 +98,10 @@ class GNNDataset(Dataset):
         features_cell_df.index = features_cell_df.index.str.lower()
 
         features_cell_np = features_cell_df.loc[cell_list].to_numpy().astype('float')
-        self.features_cell_t = torch.FloatTensor(features_cell_np).to(device)
-        self.labels_t = torch.LongTensor(label_list).to(device)
+        self.features_cell_t = torch.FloatTensor(features_cell_np)\
+            # .to(device)
+        self.labels_t = torch.LongTensor(label_list)\
+            # .to(device)
 
         with open(vocab_file, 'r') as f:
             self.vocab = f.readlines()
@@ -110,8 +112,10 @@ class GNNDataset(Dataset):
         drug1_id_list = [get_id(self.ID2id, x) for x in drug1_list]
         drug2_id_list = [get_id(self.ID2id, x) for x in drug2_list]
 
-        self.drug1_t = torch.LongTensor(drug1_id_list).to(device)
-        self.drug2_t = torch.LongTensor(drug2_id_list).to(device)
+        self.drug1_t = torch.LongTensor(drug1_id_list)\
+            # .to(device)
+        self.drug2_t = torch.LongTensor(drug2_id_list)\
+            # .to(device)
 
     def __getitem__(self, index):
         return self.drug1_t[index].unsqueeze(-1), self.drug2_t[index].unsqueeze(-1), self.features_cell_t[index], self.labels_t[index].unsqueeze(-1)
