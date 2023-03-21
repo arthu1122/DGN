@@ -282,9 +282,9 @@ def main(args=None):
     data_test = GNNDataset(label_df=test_data, vocab_file=args.drug_vocab, features_cell_df=features_cell, device=accelerator.device)
 
     loader_train = DataLoader(data_train, batch_size=args.train_batch_size, shuffle=None, collate_fn=batch_collate,
-                              num_workers=args.num_workers, pin_memory=True, persistent_workers=True)
+                              num_workers=args.num_workers, pin_memory=True)
     loader_test = DataLoader(data_test, batch_size=args.test_batch_size, shuffle=None, collate_fn=batch_collate,
-                             num_workers=args.num_workers, pin_memory=True, persistent_workers=True)
+                             num_workers=args.num_workers, pin_memory=True)
 
     # ----------- Model Prepare ---------------------------------------------------
     modeling = UnnamedModel
