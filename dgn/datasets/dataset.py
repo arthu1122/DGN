@@ -10,11 +10,12 @@ import torch_geometric.transforms as T
 import pandas as pd
 import re
 
+import numpy as np
+
 
 # graph data creating
 # Heterogeneous graph
 def create_data(drug_feature, target_feature, dd_edge_index, dt_edge_index, tt_edge_index, dd_edge_att, device):
-
     data = HeteroData()
 
     data['drug'].x = drug_feature  # [num_drugs, num_features_drug]
@@ -60,7 +61,6 @@ def get_graph_data(features_drug_file, features_target_file, e_dd_index_file, e_
     drug_feature = torch.FloatTensor(features_drug.values.astype('float'))
     target_feature = torch.FloatTensor(features_target.values.astype('float'))
 
-
     def transform(indexs):
         # "[0,1]\n" -> [0,1]
         begin = []
@@ -83,45 +83,38 @@ def get_graph_data(features_drug_file, features_target_file, e_dd_index_file, e_
 
 
 class GNNDataset(Dataset):
-    def __init__(self, label_df, vocab_file, features_cell_df):
+    def __init__(self, label_df, vocab_file, features_cell_df, device):
         # vocab: drug_vocab
         super(GNNDataset, self).__init__()
 
         # # TODO test
         # label_df = label_df[:100]
 
-        self.data = label_df[['Cell_Line_Name', 'DrugID1', 'DrugID2']]
-        self.label = list(label_df['Label'])
+        cell_list = list(label_df['Cell_Line_Name'].str.lower())
+        drug1_list = list(label_df['DrugID1'])
+        drug2_list = list(label_df['DrugID2'])
+        label_list = list(label_df['Label'])
 
-        self.features_cell = features_cell_df
-        self.features_cell.index = self.features_cell.index.str.lower()
+        features_cell_df.index = features_cell_df.index.str.lower()
+
+        features_cell_np = features_cell_df.loc[cell_list].to_numpy().astype('float')
+        self.features_cell_t = torch.FloatTensor(features_cell_np).to(device)
+        self.labels_t = torch.LongTensor(label_list).to(device)
 
         with open(vocab_file, 'r') as f:
             self.vocab = f.readlines()
-            self.id_dict = {}
+            self.ID2id = {}
             for i in range(len(self.vocab)):
-                self.id_dict[self.vocab[i][:-1]] = i
+                self.ID2id[self.vocab[i][:-1]] = i
+
+        drug1_id_list = [get_id(self.ID2id, x) for x in drug1_list]
+        drug2_id_list = [get_id(self.ID2id, x) for x in drug2_list]
+
+        self.drug1_t = torch.LongTensor(drug1_id_list).to(device)
+        self.drug2_t = torch.LongTensor(drug2_id_list).to(device)
 
     def __getitem__(self, index):
-
-        # start_time=time.time()
-
-        index_data = self.data.iloc[index]
-        cell_name, drug1, drug2 = index_data['Cell_Line_Name'], index_data['DrugID1'], index_data['DrugID2']
-
-        drug1_id = get_id(self.id_dict, drug1)
-        drug2_id = get_id(self.id_dict, drug2)
-
-        cell_name = cell_name.lower()
-
-        cell_feature = list(self.features_cell.astype('float').loc[cell_name])
-        cell_feature = torch.FloatTensor(cell_feature)
-
-        # end_time = time.time()
-        # run_time = end_time - start_time
-        # print("{} {}s".format("get item", run_time))
-
-        return drug1_id, drug2_id, cell_feature, self.label[index]
+        return self.drug1_t[index].unsqueeze(-1), self.drug2_t[index].unsqueeze(-1), self.features_cell_t[index], self.labels_t[index].unsqueeze(-1)
 
     def __len__(self):
-        return len(self.data)
+        return len(self.labels_t)

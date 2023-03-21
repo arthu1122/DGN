@@ -107,7 +107,7 @@ def predict(model, device, loader_test, graph_data):
             x_dict = graph_data.collect('x')
             edge_index_dict = graph_data.collect('edge_index')
             edge_attr_dict = graph_data.collect('edge_attr')
-            output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict,edge_attr_dict)
+            output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict, edge_attr_dict)
 
             ys = F.softmax(output, 1).to('cpu').data.numpy()
 
@@ -235,11 +235,13 @@ def batch_collate(batch):
     for sample in batch:
         drug1_ids.append(sample[0])
         drug2_ids.append(sample[1])
-        cell_features.append(torch.unsqueeze(sample[2], 0))
+        cell_features.append(sample[2].unsqueeze(0))
         labels.append(sample[3])
 
+    drug1_ids = torch.concat(drug1_ids)
+    drug2_ids = torch.concat(drug2_ids)
     cell_features = torch.concat(cell_features)
-    labels = torch.tensor(labels)
+    labels = torch.concat(labels)
 
     # end_time = time.time()
     # run_time = end_time - start_time
@@ -276,13 +278,13 @@ def main(args=None):
                                 e_dt_index_file=args.dt_edge, e_tt_index_file=args.tt_edge, e_dd_att_file=args.dd_att, device=accelerator.device)
     graph_data.to(accelerator.device)
 
-    data_train = GNNDataset(label_df=train_data, vocab_file=args.drug_vocab, features_cell_df=features_cell)
-    data_test = GNNDataset(label_df=test_data, vocab_file=args.drug_vocab, features_cell_df=features_cell)
+    data_train = GNNDataset(label_df=train_data, vocab_file=args.drug_vocab, features_cell_df=features_cell, device=accelerator.device)
+    data_test = GNNDataset(label_df=test_data, vocab_file=args.drug_vocab, features_cell_df=features_cell, device=accelerator.device)
 
     loader_train = DataLoader(data_train, batch_size=args.train_batch_size, shuffle=None, collate_fn=batch_collate,
-                              num_workers=args.num_workers, pin_memory=True)
+                              num_workers=args.num_workers, pin_memory=True, persistent_workers=True)
     loader_test = DataLoader(data_test, batch_size=args.test_batch_size, shuffle=None, collate_fn=batch_collate,
-                             num_workers=args.num_workers, pin_memory=True)
+                             num_workers=args.num_workers, pin_memory=True, persistent_workers=True)
 
     # ----------- Model Prepare ---------------------------------------------------
     modeling = UnnamedModel
