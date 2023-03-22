@@ -1,28 +1,26 @@
 import argparse
 import datetime
 import os
-import random
-import time
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from accelerate import Accelerator
 from sklearn import metrics
 from sklearn.metrics import cohen_kappa_score, accuracy_score, roc_auc_score, precision_score, recall_score, \
     balanced_accuracy_score
 from sklearn.metrics import confusion_matrix
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
-from datasets.dataset import GNNDataset, get_graph_data
+from data.dataset import GNNDataset
+from data.graph import preprocess_adj, GraphData
+from data.pipeline import GraphPipeline
+from models.model import UnnamedModel
 from utils.ema import initializes_target_network, update_target_network_parameters
 from utils.mae import get_mask_x_dict, get_mae_loss
-from models.model import UnnamedModel
-
-from accelerate import Accelerator
 
 torch.set_printoptions(threshold=np.inf)
 accelerator = Accelerator()
@@ -52,7 +50,7 @@ def get_args(args):
     parser.add_argument("--tt_edge", type=str, default="../data/processed/edge_index/tar_tar_edge_index.txt", help="target-target edge index file(.txt)")
     parser.add_argument("--dd_att", type=str, default="../data/processed/edge_att/drug_drug_edge_att.txt", help="drug-drug edge attribute file(.txt)")
     parser.add_argument("--drug_vocab", type=str, default="../data/processed/vocab/drug_vocab.txt", help="drug encoded file(.txt)")
-    parser.add_argument("--output", type=str, default="../data/result/default/", help="output file fold")
+    parser.add_argument("--output", type=str, default="./bin/result", help="output file fold")
     parser.add_argument("--num_workers", type=int, default=0, help="dataloader num_workers")
 
     parser.add_argument("--target_features_num", type=int, default=570, help="target features num")
@@ -65,6 +63,7 @@ def get_args(args):
     parser.add_argument("--kl", type=float, default=1.0, help="kl loss ratio")
     parser.add_argument("--mae", type=float, default=0.1, help="mae loss ratio")
     parser.add_argument("--setting", type=int, default=3, help="train type")
+    parser.add_argument("--multi_model_settings", type=list, default=[2, 3], help="settings using target_model")
 
     parser.add_argument("--num_layers", type=int, default=1, help="gnn layer num")
     parser.add_argument("--hidden_channels", type=int, default=768, help="hidden channels in model")
@@ -76,13 +75,10 @@ def get_args(args):
     args = parser.parse_args(args)
 
     if not os.path.exists(args.output):
-        os.mkdir(args.output[:-1])
+        os.mkdir(args.output)
 
-    # timestr = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-    # os.mkdir(args.output + timestr)
-    # args.output = args.output + timestr + "/"
-
-    args.multi_model_settings = [2, 3]
+    args.model_output = args.output + "/" + str(args.fold) + '--model.model'
+    args.result_output = args.output + "/" + str(args.fold) + '--AUCs.txt'
 
     return args
 
@@ -101,13 +97,11 @@ def predict(model, device, loader_test, graph_data):
             accelerator.print("Dev Step[{}/{}]".format(step + 1, len(loader_test)))
 
             drug1_ids, drug2_ids, cell_features, labels = data
-            # cell_features = cell_features.to(device)
-            # labels = labels.to(device)
 
-            x_dict = graph_data.collect('x')
-            edge_index_dict = graph_data.collect('edge_index')
-            edge_attr_dict = graph_data.collect('edge_attr')
-            output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict, edge_attr_dict)
+            x_dict = graph_data.node_dict
+            adj_dict = graph_data.adj_dict
+            edge_attr_dict = graph_data.edge_attr_dict
+            output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
 
             ys = F.softmax(output, 1).to('cpu').data.numpy()
 
@@ -121,32 +115,26 @@ def predict(model, device, loader_test, graph_data):
 
 
 def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, epoch, target_model, accelerator, args):
-    # online_model.to(device)
     online_model.train()
     for batch_idx, data in enumerate(loader_train):
-        # start_time = time.time()
 
         drug1_ids, drug2_ids, cell_features, labels = data
 
-        # cell_features = cell_features.to(device)
-        # labels = labels.to(device)
-
         optimizer.zero_grad()
-        x_dict = graph_data.collect('x')
-        edge_index_dict = graph_data.collect('edge_index')
-        edge_attr_dict = graph_data.collect('edge_attr')
-        loss, loss_print = get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict, edge_attr_dict)
+
+        x_dict = graph_data.node_dict
+        adj_dict = graph_data.adj_dict
+        edge_attr_dict = graph_data.edge_attr_dict
+
+        loss, loss_print = get_loss(args, cell_features, drug1_ids, drug2_ids, adj_dict, labels, loss_fn, online_model, target_model, x_dict, edge_attr_dict)
 
         accelerator.backward(loss)
 
         optimizer.step()
 
         for name, para in online_model.named_parameters():
-            if para.grad == None:
+            if para.grad is None:
                 accelerator.print(name)
-
-        # ls = [name for name, para in online_model.named_parameters() if para.grad == None]
-        # accelerator.print(ls)
 
         if args.setting in args.multi_model_settings:
             update_target_network_parameters(online_model, target_model, args.target_net_update)
@@ -155,12 +143,8 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
             accelerator.print("[Train] {} Epoch[{}/{}] step[{}/{}] ".format(
                 datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, args.epochs, batch_idx + 1, len(loader_train)) + loss_print)
 
-        # end_time = time.time()
-        # run_time = end_time - start_time
-        # accelerator.print("{} {}s".format("a batch", run_time))
 
-
-def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels, loss_fn, online_model, target_model, x_dict, edge_attr_dict):
+def get_loss(args, cell_features, drug1_ids, drug2_ids, adj_dict, labels, loss_fn, online_model, target_model, x_dict, edge_attr_dict):
     """
     need update args.multi_model_settings
     """
@@ -168,15 +152,15 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
     loss = torch.inf
     # single model
     if args.setting == 1:
-        output, x_dict = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict, edge_attr_dict)
+        output, x_dict = online_model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
         loss = loss_fn(output, labels)
         loss_print = "loss={:.6f}".format(loss.item())
     # MAE + EMA
     elif args.setting == 2:
         mask_drug, mask_target = online_model.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict, edge_attr_dict)
-        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict, edge_attr_dict)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, adj_dict, edge_attr_dict)
+        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
         loss0 = loss_fn(_output, labels)
 
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
@@ -187,9 +171,9 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
     elif args.setting == 3:
         mask_drug, mask_target = online_model.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict, edge_attr_dict)
-        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict, edge_attr_dict)
-        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict, edge_attr_dict)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, adj_dict, edge_attr_dict)
+        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
+        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
         loss0 = loss_fn(_output, labels)
         loss1 = loss_fn(output1, labels)
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
@@ -198,11 +182,12 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
         loss_kl = (loss_kl0 + loss_kl1) / 2
         loss = loss0 + loss1 + args.kl * loss_kl + args.mae * loss_mae
         loss_print = "loss={:.6f} [loss0={:.6f} loss1={:.6f} loss_kl={:.6f} loss_mae={:.6f}]".format(loss.item(), loss0.item(), loss1.item(), loss_kl.item(), loss_mae.item())
+    # Single Net KL
     elif args.setting == 4:
         mask_drug, mask_target = online_model.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, edge_index_dict, edge_attr_dict)
-        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, edge_index_dict, edge_attr_dict)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, adj_dict, edge_attr_dict)
+        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
         loss0 = loss_fn(_output, labels)
         loss1 = loss_fn(output1, labels)
 
@@ -217,12 +202,11 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, edge_index_dict, labels,
 
 # get batch
 def batch_collate(batch):
-    # start_time = time.time()
-
     drug1_ids = []
     drug2_ids = []
     cell_features = []
     labels = []
+
     for sample in batch:
         drug1_ids.append(sample[0])
         drug2_ids.append(sample[1])
@@ -234,17 +218,11 @@ def batch_collate(batch):
     cell_features = torch.concat(cell_features)
     labels = torch.concat(labels)
 
-    # end_time = time.time()
-    # run_time = end_time - start_time
-    # accelerator.print("{} {}s".format("collate", run_time))
-
     return drug1_ids, drug2_ids, cell_features, labels
 
 
 def main(args=None):
     args = get_args(args)
-
-    # CPU or GPU
 
     if torch.cuda.is_available():
         device_index = 'cuda:' + args.device
@@ -257,7 +235,18 @@ def main(args=None):
     for k, v in sorted(vars(args).items()):
         accelerator.print(k, '=', v)
 
-    # ----------- Data Prepare ---------------------------------------------------
+    # ----------- File Read ------------------------------------------------------
+    features_drug = pd.read_csv(args.f_drug, index_col='DrugID', dtype=str)
+    features_target = pd.read_csv(args.f_target, index_col='TargetID', dtype=str)
+    with open(args.dd_edge, 'r') as f:
+        edge_index_drug_drug = f.readlines()
+    with open(args.dd_att, 'r') as f:
+        edge_attr_drug_drug = f.readlines()
+    with open(args.dt_edge, 'r') as f:
+        edge_index_drug_target = f.readlines()
+    with open(args.tt_edge, 'r') as f:
+        edge_index_target_target = f.readlines()
+
     train_path = args.data + "fold_" + str(args.fold) + "_train.csv"
     test_path = args.data + "fold_" + str(args.fold) + "_test.csv"
     train_data = pd.read_csv(train_path)
@@ -265,12 +254,18 @@ def main(args=None):
 
     features_cell = pd.read_csv(args.f_cell, index_col='Cell_Line_Name', dtype=str)
 
-    graph_data = get_graph_data(features_drug_file=args.f_drug, features_target_file=args.f_target, e_dd_index_file=args.dd_edge,
-                                e_dt_index_file=args.dt_edge, e_tt_index_file=args.tt_edge, e_dd_att_file=args.dd_att, device=accelerator.device)
-    graph_data.to(accelerator.device)
+    with open(args.drug_vocab, 'r') as f:
+        vocab = f.readlines()
+        ID2id = {}
+        for i in range(len(vocab)):
+            ID2id[vocab[i][:-1]] = i
 
-    data_train = GNNDataset(label_df=train_data, vocab_file=args.drug_vocab, features_cell_df=features_cell, device=accelerator.device)
-    data_test = GNNDataset(label_df=test_data, vocab_file=args.drug_vocab, features_cell_df=features_cell, device=accelerator.device)
+    # ----------- Data Prepare ---------------------------------------------------
+    graph_data = GraphPipeline.get_data(features_drug, features_target, edge_index_drug_drug,
+                                        edge_index_drug_target, edge_index_target_target, edge_attr_drug_drug, accelerator.device)
+
+    data_train = GNNDataset(train_data, ID2id, features_cell, accelerator.device)
+    data_test = GNNDataset(test_data, ID2id, features_cell, accelerator.device)
 
     loader_train = DataLoader(data_train, batch_size=args.train_batch_size, shuffle=None, collate_fn=batch_collate,
                               num_workers=args.num_workers, pin_memory=True)
@@ -297,11 +292,10 @@ def main(args=None):
     accelerator.print("model:", online_model)
 
     # ----------- Output Prepare ---------------------------------------------------
-    model_file_name = args.output + str(args.fold) + '--model.model'
-    file_AUCs = args.output + str(args.fold) + '--AUCs.txt'
+
     AUCs = "%-10s%-15s%-15s%-15s%-15s%-15s%-15s%-15s%-15s" % ('Epoch', 'AUC_dev', 'PR_AUC', 'ACC', 'BACC', 'PREC', 'TPR', 'KAPPA', 'RECALL')
     # AUCs = 'Epoch\tAUC_dev\tPR_AUC\tACC\tBACC\tPREC\tTPR\tKAPPA\tRECALL'
-    with open(file_AUCs, 'w') as f:
+    with open(args.result_output, 'w') as f:
         for k, v in sorted(vars(args).items()):
             f.write(str(k) + '=' + str(v) + "\n")
         f.write(str(online_model) + '\n')
@@ -317,7 +311,6 @@ def main(args=None):
     epochs = args.epochs
     accelerator.print('Training begin!')
     for epoch in range(epochs):
-        # TODO
         train(device, graph_data, loader_train, loss_fn, online_model, optimizer, epoch, target_model, accelerator, args)
 
         # T is correct label
@@ -342,12 +335,12 @@ def main(args=None):
         if best_auc < AUC:
             best_auc = AUC
             # AUCs = [epoch, AUC, PR_AUC, ACC, BACC, PREC, TPR, KAPPA, recall]
-            AUCs = "%-10d%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f" % (epoch, AUC, PR_AUC, ACC, BACC, PREC, TPR, KAPPA, recall)
+            AUCs = "%-10d%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f%-15.8f" % (epoch, AUC, PR_AUC, ACC, BACC, PREC, TPR, KAPPA)
 
-            with open(file_AUCs, 'a') as f:
+            with open(args.result_output, 'a') as f:
                 f.write(AUCs + '\n')
 
-            torch.save(online_model.state_dict(), model_file_name)
+            torch.save(online_model.state_dict(), args.model_output)
 
         accelerator.print('best_auc', best_auc)
 

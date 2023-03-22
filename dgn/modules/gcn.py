@@ -2,7 +2,7 @@ import numpy as np
 import torch.nn as nn
 import torch
 
-from utils.normalize import preprocess_adj, preprocess_features
+
 
 
 class GCNConv(nn.Module):
@@ -64,21 +64,21 @@ class GCNConv(nn.Module):
                 return aggr_src + self.bias1, aggr_dst + self.bias2
 
 
-if __name__ == '__main__':
-    x1 = np.random.random((60, 500))
-    x2 = np.random.random((120, 800))
-
-    x2index = np.arange(120)[np.newaxis, :]
-    x1index = np.random.randint(0, 59, 120)[np.newaxis, :]
-
-    edges = np.concatenate((x1index, x2index), axis=0)
-    edges = edges.T
-
-    adj = preprocess_adj(edges, (60, 120))
-    x1 = preprocess_features(x1)
-    x2 = preprocess_features(x2)
-
-    gcn = GCNConv((500, 800), 768)
-
-    res = gcn((x1, x2), adj)
-    print(res)
+# if __name__ == '__main__':
+#     x1 = np.random.random((60, 500))
+#     x2 = np.random.random((120, 800))
+#
+#     x2index = np.arange(120)[np.newaxis, :]
+#     x1index = np.random.randint(0, 59, 120)[np.newaxis, :]
+#
+#     edges = np.concatenate((x1index, x2index), axis=0)
+#     edges = edges.T
+#
+#     adj = preprocess_adj(edges, (60, 120))
+#     x1 = preprocess_features(x1)
+#     x2 = preprocess_features(x2)
+#
+#     gcn = GCNConv((500, 800), 768)
+#
+#     res = gcn((x1, x2), adj)
+#     print(res)
