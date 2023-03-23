@@ -85,10 +85,11 @@ class TRMGATLayer(nn.Module):
         d = q.shape[-1]
         scores = torch.matmul(q, k.transpose(0, 1)) / math.sqrt(d)
 
-        zero_vec = -9e15 * torch.ones_like(scores)
-        scores = torch.where(adj > 0, scores, zero_vec)
         if edge_attr is not None:
             scores = scores + edge_attr
+
+        zero_vec = -9e15 * torch.ones_like(scores)
+        scores = torch.where(adj > 0, scores, zero_vec)
 
         attention = torch.softmax(scores, dim=-1)
         attention = F.dropout(attention, self.dropout, training=self.training)

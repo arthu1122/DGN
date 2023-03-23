@@ -73,6 +73,8 @@ class GNNLayer(nn.Module):
             self.layer = GATLayer
         elif args.gnn == 'trmgat':
             self.layer = TRMGATLayer
+        else:
+            raise NotImplementedError(args.gnn)
 
         self.dd = self.layer(args.hidden_channels, args.hidden_channels)
         self.dt = self.layer(args.hidden_channels, args.hidden_channels)
