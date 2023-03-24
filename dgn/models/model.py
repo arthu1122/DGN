@@ -63,22 +63,22 @@ class GNNNet(nn.Module):
         for gnn in self.gnns:
             all_nodes = gnn(all_nodes, adj_dict, edge_attr_dict)
 
-        return all_nodes[:drug.shape[0]]
+        return {'drug': all_nodes[:drug.shape[0]], 'target': all_nodes[drug.shape[0]:]}
 
 
 class GNNLayer(nn.Module):
     def __init__(self, args):
         super(GNNLayer, self).__init__()
         if args.gnn == 'gat':
-            self.layer = GATLayer
+            self.sublayer = GATLayer
         elif args.gnn == 'trmgat':
-            self.layer = TRMGATLayer
+            self.sublayer = TRMGATLayer
         else:
             raise NotImplementedError(args.gnn)
 
-        self.dd = self.layer(args.hidden_channels, args.hidden_channels)
-        self.dt = self.layer(args.hidden_channels, args.hidden_channels)
-        self.tt = self.layer(args.hidden_channels, args.hidden_channels)
+        self.dd = self.sublayer(args.hidden_channels, args.hidden_channels)
+        self.dt = self.sublayer(args.hidden_channels, args.hidden_channels)
+        self.tt = self.sublayer(args.hidden_channels, args.hidden_channels)
 
     def forward(self, all_nodes, adj_dict, edge_attr_dict, aggr='avg'):
         x1 = self.dd(all_nodes, adj_dict['only_dd'], edge_attr_dict['only_dd'])
@@ -131,11 +131,11 @@ class UnnamedModel(nn.Module):
             self.mask_drug = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.drug_features_num)).float())
 
     def forward(self, drug1_id, drug2_id, cell_features, x_dict, adj_dict, edge_attr_dict):
-        drug_nodes = self.gnn(x_dict, adj_dict, edge_attr_dict)
+        x_dict = self.gnn(x_dict, adj_dict, edge_attr_dict)
 
         # get drugs hidden_state
-        drug1 = drug_nodes[drug1_id]
-        drug2 = drug_nodes[drug2_id]
+        drug1 = x_dict['drug'][drug1_id]
+        drug2 = x_dict['drug'][drug2_id]
         # get cell hidden_state
         cell = self.reduction(cell_features)
 

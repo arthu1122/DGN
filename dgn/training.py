@@ -165,6 +165,7 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, adj_dict, labels, loss_f
 
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
 
+
         loss = loss0 + args.mae * loss_mae
         loss_print = "loss={:.6f} [loss0={:.6f} loss_mae={:.6f}]".format(loss.item(), loss0.item(), loss_mae.item())
     # MAE + EMA + KL
