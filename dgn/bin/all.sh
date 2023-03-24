@@ -59,8 +59,8 @@ run() {
     >"$2"
 }
 
-run 1 "bin/train_log/f1.log" 29500 ${visible_device1}
-run 2 "bin/train_log/f2.log" 29501 ${visible_device2}
-run 3 "bin/train_log/f3.log" 29502 ${visible_device3}
-run 4 "bin/train_log/f4.log" 29503 ${visible_device4}
-run 5 "bin/train_log/f5.log" 29504 ${visible_device5}
+(run 1 "bin/train_log/f1.log" 29500 ${visible_device1}) &
+(run 2 "bin/train_log/f2.log" 29501 ${visible_device2}) &
+(run 3 "bin/train_log/f3.log" 29502 ${visible_device3}) &
+(run 4 "bin/train_log/f4.log" 29503 ${visible_device4}) &
+(run 5 "bin/train_log/f5.log" 29504 ${visible_device5})
