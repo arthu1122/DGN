@@ -15,7 +15,7 @@ gnn="gat"
 train_batch_size=512
 lr=4e-5
 setting=2
-output="./bin/s2gat"
+output="./bin/s2gat/"
 num_workers=2
 
 target_net_update=0.996
