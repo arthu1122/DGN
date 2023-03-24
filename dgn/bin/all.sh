@@ -36,7 +36,7 @@ test_batch_size=512
 # $3:port
 # $4:visible devices
 run() {
-  nohup CUDA_VISIBLE_DEVICES="$4", TORCH_DISTRIBUTED_DEBUG=DETAIL accelerate launch --main_process_port="$3" ./training.py \
+  CUDA_VISIBLE_DEVICES="$4", TORCH_DISTRIBUTED_DEBUG=DETAIL nohup accelerate launch --main_process_port="$3" ./training.py \
     --gnn="${gnn}" \
     --setting="${setting}" \
     --output="${output}" \
