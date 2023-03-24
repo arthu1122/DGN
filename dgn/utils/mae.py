@@ -13,14 +13,13 @@ def get_mask_index(total, ratio):
     :param ratio: mask ratio
     :return: mask index matrix
     """
-    mask = torch.ones((total, 1))
-    mask = F.dropout(mask, p=ratio)
-    mask = torch.where(mask != 0, 0, 1)
-    mask_index= torch.nonzero(mask == 1)[:, 0]
-    return mask,mask_index
+    mask = torch.zeros(total)
+    select = random.sample(range(total), int(total * ratio))
+    mask[select] = 1
+    return mask.unsqueeze(-1), select
 
 
-def get_mae_loss(x_dict, _x_dict,drug_mask_index,target_mask_index):
+def get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index):
     """
     mae loss: cosine error in masked nodes
 
@@ -36,8 +35,8 @@ def get_mae_loss(x_dict, _x_dict,drug_mask_index,target_mask_index):
     target_features = x_dict['target']
 
     # leave the nodes masked
-    drug_features_m=drug_features[drug_mask_index]
-    target_features_m=target_features[target_mask_index]
+    drug_features_m = drug_features[drug_mask_index]
+    target_features_m = target_features[target_mask_index]
 
     # as same as x_dict
     _drug_features = _x_dict['drug']
@@ -73,8 +72,8 @@ def get_mask_x_dict(x_dict, m_drug, m_target, ratio=0.1):
     drug_features = x_dict['drug']
     target_features = x_dict['target']
 
-    drug_mask,drug_mask_index = get_mask_index(drug_features.shape[0], ratio)
-    target_mask,target_mask_index = get_mask_index(target_features.shape[0], ratio)
+    drug_mask, drug_mask_index = get_mask_index(drug_features.shape[0], ratio)
+    target_mask, target_mask_index = get_mask_index(target_features.shape[0], ratio)
 
     m_drug = m_drug.to(drug_features.device)
     m_target = m_target.to(target_features.device)
@@ -89,4 +88,4 @@ def get_mask_x_dict(x_dict, m_drug, m_target, ratio=0.1):
 
     _x_dict = {'drug': _drug_features, 'target': _target_features}
 
-    return _x_dict,drug_mask_index, target_mask_index,
+    return _x_dict, drug_mask_index, target_mask_index,

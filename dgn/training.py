@@ -159,12 +159,12 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, adj_dict, labels, loss_f
     elif args.setting == 2:
         mask_drug, mask_target = online_model.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
+
         _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, adj_dict, edge_attr_dict)
         output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
         loss0 = loss_fn(_output, labels)
 
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
-
 
         loss = loss0 + args.mae * loss_mae
         loss_print = "loss={:.6f} [loss0={:.6f} loss_mae={:.6f}]".format(loss.item(), loss0.item(), loss_mae.item())
