@@ -70,7 +70,7 @@ def get_args(args):
     parser.add_argument("--dropout", type=float, default=0.2, help="dropout weight")
     parser.add_argument("--project1", type=int, default=2048, help="hidden channels in reduction 1st Linear")
     parser.add_argument("--project2", type=int, default=512, help="hidden channels in reduction 2nd Linear")
-    parser.add_argument("--gnn", type=str, default='gat', help="type of gnn")
+    parser.add_argument("--gnn", type=str, default='trmgat', help="type of gnn")
 
     args = parser.parse_args(args)
 
@@ -99,9 +99,9 @@ def predict(model, device, loader_test, graph_data):
             drug1_ids, drug2_ids, cell_features, labels = data
 
             x_dict = graph_data.node_dict
-            adj_dict = graph_data.adj_dict
+            mask = graph_data.mask
             edge_attr_dict = graph_data.edge_attr_dict
-            output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
+            output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
 
             ys = F.softmax(output, 1).to('cpu').data.numpy()
 
@@ -123,10 +123,10 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
         optimizer.zero_grad()
 
         x_dict = graph_data.node_dict
-        adj_dict = graph_data.adj_dict
+        mask = graph_data.mask
         edge_attr_dict = graph_data.edge_attr_dict
 
-        loss, loss_print = get_loss(args, cell_features, drug1_ids, drug2_ids, adj_dict, labels, loss_fn, online_model, target_model, x_dict, edge_attr_dict)
+        loss, loss_print = get_loss(args, cell_features, drug1_ids, drug2_ids, mask, labels, loss_fn, online_model, target_model, x_dict, edge_attr_dict)
 
         accelerator.backward(loss)
 
@@ -144,7 +144,7 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
                 datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, args.epochs, batch_idx + 1, len(loader_train)) + loss_print)
 
 
-def get_loss(args, cell_features, drug1_ids, drug2_ids, adj_dict, labels, loss_fn, online_model, target_model, x_dict, edge_attr_dict):
+def get_loss(args, cell_features, drug1_ids, drug2_ids, mask, labels, loss_fn, online_model, target_model, x_dict, edge_attr_dict):
     """
     need update args.multi_model_settings
     """
@@ -152,7 +152,7 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, adj_dict, labels, loss_f
     loss = torch.inf
     # single model
     if args.setting == 1:
-        output, x_dict = online_model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
+        output, x_dict = online_model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
         loss = loss_fn(output, labels)
         loss_print = "loss={:.6f}".format(loss.item())
     # MAE + EMA
@@ -160,8 +160,8 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, adj_dict, labels, loss_f
         mask_drug, mask_target = online_model.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
 
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, adj_dict, edge_attr_dict)
-        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, mask, edge_attr_dict)
+        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
         loss0 = loss_fn(_output, labels)
 
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
@@ -172,9 +172,9 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, adj_dict, labels, loss_f
     elif args.setting == 3:
         mask_drug, mask_target = online_model.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, adj_dict, edge_attr_dict)
-        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
-        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, mask, edge_attr_dict)
+        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
+        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
         loss0 = loss_fn(_output, labels)
         loss1 = loss_fn(output1, labels)
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
@@ -187,8 +187,8 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, adj_dict, labels, loss_f
     elif args.setting == 4:
         mask_drug, mask_target = online_model.get_mask()
         _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, adj_dict, edge_attr_dict)
-        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, adj_dict, edge_attr_dict)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, mask, edge_attr_dict)
+        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
         loss0 = loss_fn(_output, labels)
         loss1 = loss_fn(output1, labels)
 
@@ -291,6 +291,8 @@ def main(args=None):
     scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, min_lr=1e-7, patience=5, verbose=True, threshold=0.0001, eps=1e-08)
 
     accelerator.print("model:", online_model)
+
+
 
     # ----------- Output Prepare ---------------------------------------------------
 

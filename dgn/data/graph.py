@@ -67,7 +67,7 @@ def preprocess_adj(edges, num_node, edge_attr=None, undirected=False, add_self_l
     if add_self_loop:
         adj = adj + sp.eye(adj.shape[0])
         if attr is not None:
-            attr=attr+sp.eye(attr.shape[0])
+            attr = attr + sp.eye(attr.shape[0])
 
     if normalize:
         adj = normalize_adj(adj)
@@ -103,10 +103,11 @@ def preprocess_features(features):
 
 
 class GraphData:
-    def __init__(self, node_dict, adj_dict, edge_attr_dict):
+    def __init__(self, node_dict, adj_dict, edge_attr_dict, mask):
         self._node_dict = node_dict
         self._adj_dict = adj_dict
         self._edge_attr_dict = edge_attr_dict
+        self._mask = mask
 
     @property
     def node_dict(self):
@@ -119,3 +120,7 @@ class GraphData:
     @property
     def edge_attr_dict(self):
         return self._edge_attr_dict
+
+    @property
+    def mask(self):
+        return self._mask

@@ -8,7 +8,6 @@ class GraphPipeline():
     def get_data(features_drug, features_target, e_index_dd, e_index_dt, e_index_tt, e_attr_dd, device):
         # --------------- Basic Data Prepare ----------------------------------------
         attr_dd = torch.FloatTensor([float(attr[:-1]) for attr in e_attr_dd])
-        # attr_dd = torch.unsqueeze(attr_dd, -1)
 
         drug_feature = torch.FloatTensor(features_drug.values.astype('float'))
         target_feature = torch.FloatTensor(features_target.values.astype('float'))
@@ -28,23 +27,25 @@ class GraphPipeline():
 
         # --------------- Adj Build  ----------------------------------------
         adj_dd, attr_dd = preprocess_adj(edge_index_dd.transpose(0, 1), drug_feature.shape[0], attr_dd, undirected=True, add_self_loop=True)
-        adj_dt,_ = preprocess_adj(edge_index_dt.transpose(0, 1), (drug_feature.shape[0], target_feature.shape[0]))
-        adj_tt,_ = preprocess_adj(edge_index_tt.transpose(0, 1), target_feature.shape[0], undirected=True, add_self_loop=True)
+        adj_dt, _ = preprocess_adj(edge_index_dt.transpose(0, 1), (drug_feature.shape[0], target_feature.shape[0]))
+        adj_tt, _ = preprocess_adj(edge_index_tt.transpose(0, 1), target_feature.shape[0], undirected=True, add_self_loop=True)
 
-        mask_dd = torch.zeros_like(adj_dd)
+        mask_dd = torch.eye(adj_dd.shape[0])
         mask_dt = torch.zeros_like(adj_dt)
-        mask_tt = torch.zeros_like(adj_tt)
+        mask_tt = torch.eye(adj_tt.shape[0])
 
         def combine(adj1, adj2, adj3):
             t1 = torch.concat((adj1, adj2), -1)
             t2 = torch.concat((adj2.transpose(0, 1), adj3), -1)
-            return torch.concat((t1, t2), 0)
+            return torch.concat((t1, t2), 0).unsqueeze(0)
 
-        only_dd = combine(adj_dd, mask_dt, mask_tt)
-        only_dt = combine(mask_dd, adj_dt, mask_tt)
-        only_tt = combine(mask_dd, mask_dt, adj_tt)
+        only_dd = 1 - combine(adj_dd, mask_dt, mask_tt)
+        only_dt = 1 - combine(mask_dd, adj_dt, mask_tt)
+        only_tt = 1 - combine(mask_dd, mask_dt, adj_tt)
+        mask=torch.concat((only_dd,only_dt,only_tt),0)
 
-        only_dd_attr=combine(attr_dd,mask_dt,mask_tt)
+
+        only_dd_attr = combine(attr_dd, mask_dt, mask_tt)
 
         # --------------- Structure Data Return  ----------------------------------------
         node_dict = {
@@ -56,14 +57,12 @@ class GraphPipeline():
             "dd": adj_dd.to(device),
             "dt": adj_dt.to(device),
             "tt": adj_tt.to(device),
-            "only_dd": only_dd.to(device),
-            "only_dt": only_dt.to(device),
-            "only_tt": only_tt.to(device)
         }
+
 
         attr_dict = {
             "dd": attr_dd.to(device),
             "only_dd": only_dd_attr.to(device)
         }
 
-        return GraphData(node_dict, adj_dict, attr_dict)
+        return GraphData(node_dict, adj_dict, attr_dict,mask)

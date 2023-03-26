@@ -28,75 +28,79 @@ class GATLayer(nn.Module):
         :param adj: normalized adjacency matrix, a sparse tensor [ node_num × node_num ]
         :return: updated node features
         """
-        Wh = self.weight1(x)
-        a_input = self._prepare_attentional_mechanism_input(Wh)  # 每一个节点和所有节点，特征。(Vall, Vall, feature)
+        wx = self.weight1(x)
+        a_input = self._prepare_attentional_mechanism_input(wx)
         e = self.leakyrelu(self.att(a_input).squeeze(2))
 
         if edge_attr is not None:
             e = e + edge_attr
 
         zero_vec = -9e15 * torch.ones_like(e)
-        attention = torch.where(adj > 0, e, zero_vec)  # 将邻接矩阵中小于0的变成负无穷
-        attention = F.softmax(attention, dim=1)  # 按行求softmax。 sum(axis=1) === 1
+        attention = torch.where(adj > 0, e, zero_vec)
+        attention = F.softmax(attention, dim=1)
         attention = F.dropout(attention, self.dropout, training=self.training)
-        h_prime = torch.matmul(attention, Wh)  # 聚合邻居函数
+        h_prime = torch.matmul(attention, wx)
 
         if self.concat:
-            return F.elu(h_prime)  # elu-激活函数
+            return F.elu(h_prime)
         else:
             return h_prime
 
     def _prepare_attentional_mechanism_input(self, Wh):
-        N = Wh.size()[0]  # number of nodes
+        N = Wh.size()[0]
 
-        Wh_repeated_in_chunks = Wh.repeat_interleave(N, dim=0)  # 复制
+        Wh_repeated_in_chunks = Wh.repeat_interleave(N, dim=0)
         Wh_repeated_alternating = Wh.repeat(N, 1)
         all_combinations_matrix = torch.cat([Wh_repeated_in_chunks, Wh_repeated_alternating], dim=1)
         return all_combinations_matrix.view(N, N, 2 * self.out_feature)
 
 
 class TRMGATLayer(nn.Module):
-    def __init__(self, in_feature, out_feature, dropout=0.1, concat=True):
+    def __init__(self, d_model, qk_dim, head, dropout=0.1):
         super(TRMGATLayer, self).__init__()
 
-        self.in_feature = in_feature
+        self.in_feature = d_model
 
-        self.out_feature = out_feature
+        self.out_feature = d_model
+        self.qk_dim = qk_dim
 
-        self.q_transform = nn.Linear(self.in_feature, self.out_feature)
-        self.k_transform = nn.Linear(self.in_feature, self.out_feature)
-        self.v_transform = nn.Linear(self.in_feature, self.out_feature)
+        self.head = head
 
-        self.concat = concat
+        self.q_transform = nn.Linear(self.in_feature, self.qk_dim, bias=False)
+        self.k_transform = nn.Linear(self.in_feature, self.qk_dim, bias=False)
+        self.v_transform = nn.Linear(self.in_feature, self.out_feature, bias=False)
+
 
         self.dropout = dropout
 
-    def forward(self, x, adj, edge_attr=None):
+        self.bn = nn.BatchNorm1d(self.out_feature)
+
+    def forward(self, x, mask, edge_attr_dict=None):
         """
+        :param adj_dict:
         :param edge_attr:
         :param x: node features [ node_num × feature_num ]
         :param adj: normalized adjacency matrix, a sparse tensor [ node_num × node_num ]
         :return: updated node features
         """
-        q = self.q_transform(x)
-        k = self.k_transform(x)
-        v = self.v_transform(x)
 
-        d = q.shape[-1]
-        scores = torch.matmul(q, k.transpose(0, 1)) / math.sqrt(d)
+        q = self.q_transform(x).view((-1, self.head, self.qk_dim // self.head)).transpose(-2, -3)
+        k = self.k_transform(x).view((-1, self.head, self.qk_dim // self.head)).transpose(-2, -3)
+        v = self.v_transform(x).view((-1, self.head, self.out_feature // self.head)).transpose(-2, -3)
 
-        if edge_attr is not None:
-            scores = scores + edge_attr
+        d = k.shape[-1]
+        scores = torch.matmul(q, k.transpose(-1, -2)) / math.sqrt(d)
 
-        zero_vec = -9e15 * torch.ones_like(scores)
-        scores = torch.where(adj > 0, scores, zero_vec)
+        if edge_attr_dict is not None:
+            scores[0] = scores[0] + edge_attr_dict['only_dd']
+
+        scores.masked_fill_(mask, -1e9)
 
         attention = torch.softmax(scores, dim=-1)
         attention = F.dropout(attention, self.dropout, training=self.training)
 
-        att = torch.matmul(attention, v)
+        result = torch.matmul(attention, v)
 
-        if self.concat:
-            return F.elu(att)  # elu-激活函数
-        else:
-            return att
+        result = result.transpose(-2, -3).reshape(-1, self.out_feature)
+
+        return self.bn(result + x)
