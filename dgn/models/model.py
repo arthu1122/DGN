@@ -11,7 +11,7 @@ class GNN(nn.Module):
         self.gnns = nn.ModuleList()
         self.num_layers = args.num_layers
         for _ in range(self.num_layers):
-            self.gnns.append(TRMGATLayer(args.hidden_channels, args.qk_dim, 3))
+            self.gnns.append(TRMGATLayer(args.hidden_channels*3, args.qk_dim*3, 3))
 
     def forward(self, all_nodes, mask, edge_attr_dict):
 
@@ -44,8 +44,8 @@ class UnnamedModel(nn.Module):
         super().__init__()
 
         # node to uniform dim
-        self.drug_fc = nn.Linear(args.drug_features_num, args.hidden_channels)
-        self.target_fc = nn.Linear(args.target_features_num, args.hidden_channels)
+        self.drug_fc = nn.Linear(args.drug_features_num, args.hidden_channels*3)
+        self.target_fc = nn.Linear(args.target_features_num, args.hidden_channels*3)
 
         # gnn
         self.gnn = GNN(args)
