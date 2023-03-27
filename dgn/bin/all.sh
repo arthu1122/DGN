@@ -11,11 +11,11 @@ visible_device4="2"
 visible_device5="0"
 
 # "gat" or "trmgat"
-gnn="gat"
+gnn="trmgat"
 train_batch_size=512
 lr=4e-5
-setting=2
-output="./bin/s2gat/"
+setting=1
+output="./bin/s1trmgat/"
 num_workers=2
 
 target_net_update=0.996
@@ -57,6 +57,7 @@ run() {
     --project2=${project2} \
     --epochs=${epochs} \
     >"$2"
+    sleep 5
 }
 
 (run 1 "bin/train_log/f1.log" 29500 ${visible_device1}) &
