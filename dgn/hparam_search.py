@@ -250,16 +250,16 @@ def main(args=None):
             f.write("qk_dim = " + str(args.qk_dim) + "\n")
             f.write("\n")
 
-        train_data = train_data.sample(frac=0.5, replace=True)
-        test_data = test_data.sample(frac=0.5, replace=True)
+        _train_data = train_data.sample(frac=0.5, replace=False)
+        _test_data = test_data.sample(frac=0.5, replace=False)
 
         loss_list, auc_list = search(_ID2id, args, device, edge_attr_drug_drug, edge_index_drug_drug, edge_index_drug_target, edge_index_target_target, features_cell, features_drug, features_target,
-                                     test_data, train_data)
+                                     _test_data, _train_data)
         with open("setting.txt", 'a') as f:
             f.write("loss\n")
             for i in loss_list:
                 f.write(str(i)+"\n")
-            f.write("auc")
+            f.write("auc\n")
             for i in auc_list:
                 f.write(str(i)+"\n")
             f.write("\n")
