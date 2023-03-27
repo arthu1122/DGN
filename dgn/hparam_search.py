@@ -221,8 +221,8 @@ def main(args=None):
     search_step = 10
     epochs = 50
 
-
-
+    with open("setting.txt", 'w') as f:
+        a=0
 
     fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(20, 6), dpi=100)
 
@@ -239,7 +239,7 @@ def main(args=None):
         args.epochs = epochs
 
         with open("setting.txt", 'a') as f:
-            f.write("setting "+str(step+1))
+            f.write("setting "+str(step+1)+"\n")
             f.write("lr = "+str(args.lr)+"\n")
             f.write("batch = " + str(args.train_batch_size) + "\n")
             f.write("num_layers = " + str(args.num_layers) + "\n")
