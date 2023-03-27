@@ -144,7 +144,7 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
         if batch_idx % args.log_step == 0:
             accelerator.print("[Train] {} Epoch[{}/{}] step[{}/{}] ".format(
                 datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, args.epochs, batch_idx + 1, len(loader_train)) + loss_print)
-    return loss_list
+    return sum(loss_list) / len(loss_list)
 
 
 # get batch
@@ -306,9 +306,7 @@ def search(_ID2id, args, device, edge_attr_drug_drug, edge_index_drug_drug, edge
     loss_list = []
     auc_list = []
     for epoch in range(epochs):
-        loss_list = train(device, graph_data, loader_train, loss_fn, online_model, optimizer, epoch, None, accelerator, args)
-
-        loss = sum(loss_list) / len(loss_list)
+        loss = train(device, graph_data, loader_train, loss_fn, online_model, optimizer, epoch, None, accelerator, args)
 
         T, S, Y = predict(online_model, device, loader_test, graph_data)
 
