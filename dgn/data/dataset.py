@@ -3,7 +3,7 @@ from torch.utils.data import Dataset
 
 
 class GNNDataset(Dataset):
-    def __init__(self, label_df, ID2id, features_cell_df, device):
+    def __init__(self, label_df, _ID2id, features_cell_df, device):
         super(GNNDataset, self).__init__()
 
         # # TODO
@@ -22,7 +22,7 @@ class GNNDataset(Dataset):
         self.labels_t = torch.LongTensor(label_list) \
             # .to(device)
 
-        self.ID2id = ID2id
+        self.ID2id = _ID2id
         drug1_id_list = [self.ID2id["Drug|||" + str(x)] for x in drug1_list]
         drug2_id_list = [self.ID2id["Drug|||" + str(x)] for x in drug2_list]
 

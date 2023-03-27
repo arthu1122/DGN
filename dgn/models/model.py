@@ -11,7 +11,7 @@ class GNN(nn.Module):
         self.gnns = nn.ModuleList()
         self.num_layers = args.num_layers
         for _ in range(self.num_layers):
-            self.gnns.append(TRMGATLayer(args.hidden_channels, args.hidden_channels // 2, 3))
+            self.gnns.append(TRMGATLayer(args.hidden_channels, args.qk_dim, 3))
 
     def forward(self, all_nodes, mask, edge_attr_dict):
 

@@ -57,7 +57,6 @@ run() {
     --project2=${project2} \
     --epochs=${epochs} \
     >"$2"
-    sleep 5
 }
 
 (run 1 "bin/train_log/f1.log" 29500 ${visible_device1}) &
