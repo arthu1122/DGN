@@ -12,8 +12,6 @@ visible_device5="0"
 
 # "gat" or "trmgat"
 gnn="trmgat"
-train_batch_size=512
-lr=4e-5
 setting=1
 output="./bin/s1trmgat/"
 num_workers=2
@@ -23,11 +21,15 @@ mask_ratio=0.1
 kl=1.0
 mae=0.1
 
+lr=4e-5
+train_batch_size=512
 num_layers=1
 hidden_channels=768
 dropout=0.2
 project1=2048
 project2=512
+qk_dim=768
+
 epochs=200
 test_batch_size=512
 
@@ -56,6 +58,7 @@ run() {
     --project1=${project1} \
     --project2=${project2} \
     --epochs=${epochs} \
+    --qk_dim=${qk_dim} \
     >"$2"
 }
 
