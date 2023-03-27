@@ -74,6 +74,8 @@ def get_args(args):
     parser.add_argument("--project2", type=int, default=512, help="hidden channels in reduction 2nd Linear")
     parser.add_argument("--gnn", type=str, default='trmgat', help="type of gnn")
 
+    parser.add_argument("--s", type=int, default=10, help="search step")
+
     args = parser.parse_args(args)
 
     if not os.path.exists(args.output):
@@ -216,31 +218,32 @@ def main(args=None):
     dropout_list = [0.1, 0.2, 0.3]
     project1_list = [512, 1024, 2048]
     project2_list = [512, 1024, 2048]
-    qk_dim_list = [384, 768,1536]
+    qk_dim_list = [384, 768, 1536]
 
     search_step = 10
     epochs = 50
 
     with open("setting.txt", 'w') as f:
-        a=0
+        a = 0
 
     fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(20, 20), dpi=200)
 
     colors = list(mcolors.TABLEAU_COLORS.keys())
     for step in range(search_step):
         args.lr = 10 ** np.random.uniform(-6, -2)
+        args.dropout = random.uniform(0.1, 0.5)
         args.train_batch_size = random.choice(train_batch_size_list)
         args.num_layers = random.choice(num_layers_list)
         args.hidden_channels = random.choice(hidden_channels_list)
-        args.dropout = random.choice(dropout_list)
+        # args.dropout = random.choice(dropout_list)
         args.project1 = random.choice(project1_list)
         args.project2 = random.choice(project2_list)
         args.qk_dim = random.choice(qk_dim_list)
         args.epochs = epochs
 
         with open("setting.txt", 'a') as f:
-            f.write("setting "+str(step+1)+"\n")
-            f.write("lr = "+str(args.lr)+"\n")
+            f.write("setting " + str(step + 1) + "\n")
+            f.write("lr = " + str(args.lr) + "\n")
             f.write("batch = " + str(args.train_batch_size) + "\n")
             f.write("num_layers = " + str(args.num_layers) + "\n")
             f.write("hidden = " + str(args.hidden_channels) + "\n")
@@ -258,10 +261,10 @@ def main(args=None):
         with open("setting.txt", 'a') as f:
             f.write("loss\n")
             for i in loss_list:
-                f.write(str(i)+"\n")
+                f.write(str(i) + "\n")
             f.write("auc\n")
             for i in auc_list:
-                f.write(str(i)+"\n")
+                f.write(str(i) + "\n")
             f.write("\n")
 
         axs[0].plot(loss_list, c=mcolors.TABLEAU_COLORS[colors[step]], label="setting" + str(step + 1))
@@ -270,6 +273,7 @@ def main(args=None):
     plt.legend(loc="upper right")
     plt.show()
     plt.savefig("./result.png")
+
 
 def search(_ID2id, args, device, edge_attr_drug_drug, edge_index_drug_drug, edge_index_drug_target, edge_index_target_target, features_cell, features_drug, features_target, test_data, train_data):
     # ----------- Data Prepare ---------------------------------------------------
