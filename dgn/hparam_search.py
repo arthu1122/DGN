@@ -224,7 +224,7 @@ def main(args=None):
     with open("setting.txt", 'w') as f:
         a=0
 
-    fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(20, 6), dpi=100)
+    fig, axs = plt.subplots(nrows=2, ncols=1, figsize=(20, 20), dpi=200)
 
     colors = list(mcolors.TABLEAU_COLORS.keys())
     for step in range(search_step):
@@ -255,10 +255,19 @@ def main(args=None):
 
         loss_list, auc_list = search(_ID2id, args, device, edge_attr_drug_drug, edge_index_drug_drug, edge_index_drug_target, edge_index_target_target, features_cell, features_drug, features_target,
                                      test_data, train_data)
+        with open("setting.txt", 'a') as f:
+            f.write("loss\n")
+            for i in loss_list:
+                f.write(str(i)+"\n")
+            f.write("auc")
+            for i in auc_list:
+                f.write(str(i)+"\n")
+            f.write("\n")
 
         axs[0].plot(loss_list, c=mcolors.TABLEAU_COLORS[colors[step]], label="setting" + str(step + 1))
         axs[1].plot(auc_list, c=mcolors.TABLEAU_COLORS[colors[step]], label="setting" + str(step + 1))
     fig.autofmt_xdate()
+    plt.legend(loc="upper right")
     plt.show()
     plt.savefig("./result.png")
 
