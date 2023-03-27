@@ -220,7 +220,7 @@ def main(args=None):
     project2_list = [512, 1024, 2048]
     qk_dim_list = [384, 768, 1536]
 
-    search_step = 10
+    search_step = args.s
     epochs = 50
 
     with open("setting.txt", 'w') as f:
