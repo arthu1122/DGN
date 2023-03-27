@@ -250,8 +250,8 @@ def main(args=None):
             f.write("qk_dim = " + str(args.qk_dim) + "\n")
             f.write("\n")
 
-        train_data = train_data.sample(frac=0.5, replace=False)
-        test_data = test_data.sample(frac=0.5, replace=False)
+        train_data = train_data.sample(frac=0.5, replace=True)
+        test_data = test_data.sample(frac=0.5, replace=True)
 
         loss_list, auc_list = search(_ID2id, args, device, edge_attr_drug_drug, edge_index_drug_drug, edge_index_drug_target, edge_index_target_target, features_cell, features_drug, features_target,
                                      test_data, train_data)
