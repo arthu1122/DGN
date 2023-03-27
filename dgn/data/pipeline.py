@@ -42,7 +42,7 @@ class GraphPipeline():
         only_dd = 1 - combine(adj_dd, mask_dt, mask_tt)
         only_dt = 1 - combine(mask_dd, adj_dt, mask_tt)
         only_tt = 1 - combine(mask_dd, mask_dt, adj_tt)
-        mask=torch.concat((only_dd,only_dt,only_tt),0)
+        mask=torch.concat((only_dd,only_dt,only_tt),0).to(device)
 
 
         only_dd_attr = combine(attr_dd, mask_dt, mask_tt)
