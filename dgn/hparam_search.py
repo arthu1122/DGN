@@ -260,7 +260,7 @@ def main(args=None):
         axs[1].plot(auc_list, c=mcolors.TABLEAU_COLORS[colors[step]], label="setting" + str(step + 1))
     fig.autofmt_xdate()
     plt.show()
-
+    plt.savefig("./result.png")
 
 def search(_ID2id, args, device, edge_attr_drug_drug, edge_index_drug_drug, edge_index_drug_target, edge_index_target_target, features_cell, features_drug, features_target, test_data, train_data):
     # ----------- Data Prepare ---------------------------------------------------
