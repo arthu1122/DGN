@@ -212,11 +212,11 @@ def main(args=None):
     train_batch_size_list = [128, 512]
 
     num_layers_list = [1, 2, 3]
-    hidden_channels_list = [768, 1024, 2048]
+    hidden_channels_list = [768, 1536, 2304]
     dropout_list = [0.1, 0.2, 0.3]
     project1_list = [512, 1024, 2048]
     project2_list = [512, 1024, 2048]
-    qk_dim_list = [384, 768]
+    qk_dim_list = [384, 768,1536]
 
     search_step = 10
     epochs = 50
