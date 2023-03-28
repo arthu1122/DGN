@@ -25,6 +25,7 @@ class SubConnection(nn.Module):
     def __init__(self, args):
         super(SubConnection, self).__init__()
 
+        self.out_feature = args.hidden_channels
         self.norm = nn.BatchNorm1d(self.out_feature)
         self.dropout = nn.Dropout(args.dropout)
         self.sublayer = TRMGATLayer(args.hidden_channels, args.qk_dim, 3, args.dropout)

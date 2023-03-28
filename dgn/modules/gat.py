@@ -99,6 +99,6 @@ class TRMGATLayer(nn.Module):
 
         result = result.transpose(-2, -3).reshape(-1, self.out_feature)
 
-        result = self.out(result)
+        output = self.out(result)
 
-        return self.bn(result + x)
+        return output
