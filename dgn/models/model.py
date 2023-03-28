@@ -31,7 +31,7 @@ class SubConnection(nn.Module):
         self.sublayer = TRMGATLayer(args.hidden_channels, args.qk_dim, 3, args.dropout)
 
     def forward(self, all_nodes, mask, edge_attr_dict):
-        return all_nodes + self.dropout(self.sublayer(self.norm(all_nodes), mask, edge_attr_dict))
+        return self.norm(all_nodes + self.dropout(self.sublayer(all_nodes, mask, edge_attr_dict)))
 
 
 class FFN(nn.Module):
