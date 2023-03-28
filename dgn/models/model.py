@@ -8,17 +8,29 @@ class GNN(nn.Module):
     def __init__(self, args):
         super(GNN, self).__init__()
 
-        self.gnns = nn.ModuleList()
+        self.layers = nn.ModuleList()
         self.num_layers = args.num_layers
         for _ in range(self.num_layers):
-            self.gnns.append(TRMGATLayer(args.hidden_channels, args.qk_dim, 3))
+            self.layers.append(SubConnection(args))
 
     def forward(self, all_nodes, mask, edge_attr_dict):
 
-        for gnn in self.gnns:
-            all_nodes = gnn(all_nodes, mask, edge_attr_dict)
+        for layer in self.layers:
+            all_nodes = layer(all_nodes, mask, edge_attr_dict)
 
         return all_nodes
+
+
+class SubConnection(nn.Module):
+    def __init__(self, args):
+        super(SubConnection, self).__init__()
+
+        self.norm = nn.BatchNorm1d(self.out_feature)
+        self.dropout = nn.Dropout(args.dropout)
+        self.sublayer = TRMGATLayer(args.hidden_channels, args.qk_dim, 3, args.dropout)
+
+    def forward(self, all_nodes, mask, edge_attr_dict):
+        return all_nodes + self.dropout(self.sublayer(self.norm(all_nodes), mask, edge_attr_dict))
 
 
 class FFN(nn.Module):

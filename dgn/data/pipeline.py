@@ -39,11 +39,11 @@ class GraphPipeline():
             t2 = torch.concat((adj2.transpose(0, 1), adj3), -1)
             return torch.concat((t1, t2), 0).unsqueeze(0)
 
-        only_dd = 1 - combine(adj_dd, mask_dt, mask_tt)
-        only_dt = 1 - combine(mask_dd, adj_dt, mask_tt)
-        only_tt = 1 - combine(mask_dd, mask_dt, adj_tt)
+        only_dd = combine(adj_dd, mask_dt, mask_tt)
+        only_dt = combine(mask_dd, adj_dt, mask_tt)
+        only_tt = combine(mask_dd, mask_dt, adj_tt)
         mask = torch.concat((only_dd, only_dt, only_tt), 0)
-        mask = (mask == 1).to(device)
+        mask = (mask != 1).to(device)
 
         only_dd_attr = combine(attr_dd, mask_dt, mask_tt)
 

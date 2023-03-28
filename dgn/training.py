@@ -152,7 +152,7 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, mask, labels, loss_fn, o
     loss = torch.inf
     # single model
     if args.setting == 1:
-        output, x_dict = online_model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
+        output, _ = online_model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
         loss = loss_fn(output, labels)
         loss_print = "loss={:.6f}".format(loss.item())
     # MAE + EMA

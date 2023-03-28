@@ -70,17 +70,13 @@ class TRMGATLayer(nn.Module):
         self.k_transform = nn.Linear(self.in_feature, self.qk_dim, bias=False)
         self.v_transform = nn.Linear(self.in_feature, self.out_feature, bias=False)
 
+        self.out = nn.Linear(self.out_feature, self.out_feature)
 
-        self.dropout = dropout
-
-        self.bn = nn.BatchNorm1d(self.out_feature)
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x, mask, edge_attr_dict=None):
         """
-        :param adj_dict:
-        :param edge_attr:
         :param x: node features [ node_num × feature_num ]
-        :param adj: normalized adjacency matrix, a sparse tensor [ node_num × node_num ]
         :return: updated node features
         """
 
@@ -97,10 +93,12 @@ class TRMGATLayer(nn.Module):
         scores.masked_fill_(mask, -1e9)
 
         attention = torch.softmax(scores, dim=-1)
-        attention = F.dropout(attention, self.dropout, training=self.training)
+        attention = self.dropout(attention)
 
         result = torch.matmul(attention, v)
 
         result = result.transpose(-2, -3).reshape(-1, self.out_feature)
+
+        result = self.out(result)
 
         return self.bn(result + x)
