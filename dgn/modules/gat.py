@@ -66,11 +66,11 @@ class TRMGATLayer(nn.Module):
 
         self.head = head
 
-        self.q_transform = nn.Linear(self.in_feature, self.qk_dim, bias=False)
-        self.k_transform = nn.Linear(self.in_feature, self.qk_dim, bias=False)
-        self.v_transform = nn.Linear(self.in_feature, self.out_feature, bias=False)
+        self.q_transform = nn.Linear(self.in_feature, self.qk_dim*self.head, bias=False)
+        self.k_transform = nn.Linear(self.in_feature, self.qk_dim*self.head, bias=False)
+        self.v_transform = nn.Linear(self.in_feature, self.out_feature*self.head, bias=False)
 
-        self.out = nn.Linear(self.out_feature, self.out_feature)
+        self.out = nn.Linear(self.out_feature*self.head, self.out_feature)
 
         self.dropout = nn.Dropout(p=dropout)
 
@@ -80,9 +80,9 @@ class TRMGATLayer(nn.Module):
         :return: updated node features
         """
 
-        q = self.q_transform(x).view((-1, self.head, self.qk_dim // self.head)).transpose(-2, -3)
-        k = self.k_transform(x).view((-1, self.head, self.qk_dim // self.head)).transpose(-2, -3)
-        v = self.v_transform(x).view((-1, self.head, self.out_feature // self.head)).transpose(-2, -3)
+        q = self.q_transform(x).view((-1, self.head, self.qk_dim )).transpose(-2, -3)
+        k = self.k_transform(x).view((-1, self.head, self.qk_dim )).transpose(-2, -3)
+        v = self.v_transform(x).view((-1, self.head, self.out_feature)).transpose(-2, -3)
 
         d = k.shape[-1]
         scores = torch.matmul(q, k.transpose(-1, -2)) / math.sqrt(d)
@@ -97,7 +97,7 @@ class TRMGATLayer(nn.Module):
 
         result = torch.matmul(attention, v)
 
-        result = result.transpose(-2, -3).reshape(-1, self.out_feature)
+        result = result.transpose(-2, -3).reshape(-1, self.out_feature*self.head)
 
         output = self.out(result)
 
