@@ -66,9 +66,9 @@ class TRMGATLayer(nn.Module):
 
         self.head = head
 
-        self.q_transform = nn.Linear(self.in_feature, self.qk_dim*self.head, bias=False)
-        self.k_transform = nn.Linear(self.in_feature, self.qk_dim*self.head, bias=False)
-        self.v_transform = nn.Linear(self.in_feature, self.out_feature*self.head, bias=False)
+        self.q_transform = nn.Linear(self.in_feature, self.qk_dim*self.head)
+        self.k_transform = nn.Linear(self.in_feature, self.qk_dim*self.head)
+        self.v_transform = nn.Linear(self.in_feature, self.out_feature*self.head)
 
         self.out = nn.Linear(self.out_feature*self.head, self.out_feature)
 
