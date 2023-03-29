@@ -10,6 +10,8 @@ visible_device4="2"
 # maybe 3
 visible_device5="0"
 
+exp_file="exp.csv"
+
 # "gat" or "trmgat"
 gnn="trmgat"
 setting=1
@@ -67,3 +69,16 @@ run() {
 (run 3 "bin/train_log/f3.log" 29502 ${visible_device3}) &
 (run 4 "bin/train_log/f4.log" 29503 ${visible_device4}) &
 (run 5 "bin/train_log/f5.log" 29504 ${visible_device5})
+
+
+nohup python3 ./calculate.py \
+    --f=${output} \
+    --o=${exp_file} \
+    --train_batch_size="${train_batch_size}" \
+    --lr="${lr}" \
+    --num_layers=${num_layers} \
+    --hidden_channels=${hidden_channels} \
+    --dropout=${dropout} \
+    --project1=${project1} \
+    --project2=${project2} \
+    --qk_dim=${qk_dim}
