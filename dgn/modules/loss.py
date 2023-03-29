@@ -9,7 +9,7 @@ class ATLoss(nn.Module):
 
     def forward(self, logits, labels):
         # TH label
-        labels= labels.unsqueeze(0)
+        labels= labels.unsqueeze(-1)
         th_label = torch.zeros_like(labels, dtype=torch.float).to(labels)
         th_label[:, 0] = 1.0
         labels[:, 0] = 0.0
