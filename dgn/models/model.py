@@ -57,7 +57,7 @@ class UnnamedModel(nn.Module):
         # output layer
         self.classfier = nn.Linear(args.hidden_channels, 2)
 
-        if args.setting != 1:
+        if args.setting not in [1, 5]:
             self.mask_target = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.target_features_num)).float())
             self.mask_drug = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.drug_features_num)).float())
 
@@ -71,7 +71,7 @@ class UnnamedModel(nn.Module):
         all_nodes = torch.concat((h_drug, h_target), 0)
 
         # 图神经网络更新节点表示
-        _h_nodes = self.gnn(all_nodes,graph_data.mask,graph_data.edge_attr_dict)
+        _h_nodes = self.gnn(all_nodes, graph_data.mask, graph_data.edge_attr_dict)
         _x_dict = {'drug': _h_nodes[:drug.shape[0]], 'target': _h_nodes[drug.shape[0]:]}
 
         # 得到两个药物表示

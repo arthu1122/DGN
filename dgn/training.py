@@ -19,6 +19,7 @@ from data.dataset import GNNDataset
 from data.graph import GraphData
 from data.pipeline import GraphPipeline
 from models.model import UnnamedModel
+from modules.loss import ATLoss
 from utils.ema import initializes_target_network, update_target_network_parameters
 from utils.mae import get_mask_x_dict, get_mae_loss
 
@@ -84,7 +85,7 @@ def get_args(args):
     return args
 
 
-def predict(model, device, loader_test, graph_data):
+def predict(model, device, loader_test, graph_data, args, loss_fn):
     # model.to(device)
     model.eval()
 
@@ -103,8 +104,13 @@ def predict(model, device, loader_test, graph_data):
 
             ys = F.softmax(output, 1).to('cpu').data.numpy()
 
-            predicted_labels = list(map(lambda x: np.argmax(x), ys))
+            if args.setting in [5]:
+                predicted_labels = loss_fn.get_label(output, num_labels=2)
+            else:
+                predicted_labels = list(map(lambda x: np.argmax(x), ys))
+
             predicted_scores = list(map(lambda x: x[1], ys))
+
             total_predlabels = torch.cat((total_predlabels, torch.Tensor(predicted_labels)), 0)
             total_preds = torch.cat((total_preds, torch.Tensor(predicted_scores)), 0)
             total_labels = torch.cat((total_labels, labels.cpu()), 0)
@@ -145,7 +151,7 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, labels, loss_fn, online_
     loss_print = ""
     loss = torch.inf
     # single model
-    if args.setting == 1:
+    if args.setting in [1, 5]:
         output, _ = online_model(drug1_ids, drug2_ids, cell_features, graph_data)
         loss = loss_fn(output, labels)
         loss_print = "loss={:.6f}".format(loss.item())
@@ -284,7 +290,11 @@ def main(args=None):
     else:
         target_model = None
 
-    loss_fn = nn.CrossEntropyLoss()
+    if args.setting in [5]:
+        loss_fn = ATLoss()
+    else:
+        loss_fn = nn.CrossEntropyLoss()
+
     optimizer = torch.optim.Adam(online_model.parameters(), lr=args.lr)
     # 学习率调整器，检测准确率的状态，然后衰减学习率
     scheduler = ReduceLROnPlateau(optimizer, mode='max', factor=0.5, min_lr=1e-7, patience=5, verbose=True, threshold=0.0001, eps=1e-08)
@@ -316,7 +326,7 @@ def main(args=None):
         # S is predict score
         # Y is predict label
 
-        T, S, Y = predict(online_model, device, loader_test, graph_data)
+        T, S, Y = predict(online_model, device, loader_test, graph_data, args, loss_fn)
 
         # compute preformence
         AUC = roc_auc_score(T, S)
