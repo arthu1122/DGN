@@ -99,10 +99,7 @@ def predict(model, device, loader_test, graph_data):
 
             drug1_ids, drug2_ids, cell_features, labels = data
 
-            x_dict = graph_data.node_dict
-            mask = graph_data.mask
-            edge_attr_dict = graph_data.edge_attr_dict
-            output, _ = model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
+            output, _ = model(drug1_ids, drug2_ids, cell_features, graph_data)
 
             ys = F.softmax(output, 1).to('cpu').data.numpy()
 
