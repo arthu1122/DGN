@@ -244,12 +244,12 @@ def main(args=None):
         with open("setting.txt", 'a') as f:
             f.write("setting " + str(step + 1) + "\n")
             f.write("lr = " + str(args.lr) + "\n")
-            f.write("batch = " + str(args.train_batch_size) + "\n")
+            f.write("train_batch_size = " + str(args.train_batch_size) + "\n")
             f.write("num_layers = " + str(args.num_layers) + "\n")
-            f.write("hidden = " + str(args.hidden_channels) + "\n")
+            f.write("hidden_channels = " + str(args.hidden_channels) + "\n")
             f.write("dropout = " + str(args.dropout) + "\n")
-            f.write("p1 = " + str(args.project1) + "\n")
-            f.write("p2 = " + str(args.project2) + "\n")
+            f.write("project1 = " + str(args.project1) + "\n")
+            f.write("project2 = " + str(args.project2) + "\n")
             f.write("qk_dim = " + str(args.qk_dim) + "\n")
             f.write("\n")
 
