@@ -32,13 +32,13 @@ qk_dim = args.qk_dim
 
 
 def get_config(args):
-    config = "lr = {} \n" \
-             "train_batch_size = {} \n" \
-             "num_layers = {} \n" \
-             "hidden_channels = {} \n" \
-             "dropout = {} \n" \
-             "project1 = {} \n" \
-             "project2 = {} \n" \
+    config = "lr = {} " \
+             "train_batch_size = {} " \
+             "num_layers = {} " \
+             "hidden_channels = {} " \
+             "dropout = {} " \
+             "project1 = {} " \
+             "project2 = {} " \
              "qk_dim = {}".format(args.lr, args.train_batch_size, args.num_layers, args.hidden_channels, args.dropout, args.project1, args.project2, args.qk_dim, )
     return config
 
