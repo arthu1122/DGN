@@ -1,7 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from modules.gat import GATLayer, TRMGATLayer
+
+from data.graph import GraphData
+from modules.gat import TRMGATLayer
 
 
 class GNN(nn.Module):
@@ -11,27 +13,13 @@ class GNN(nn.Module):
         self.layers = nn.ModuleList()
         self.num_layers = args.num_layers
         for _ in range(self.num_layers):
-            self.layers.append(SubConnection(args))
+            self.layers.append(TRMGATLayer(args.hidden_channels, args.qk_dim, 3, args.dropout))
 
     def forward(self, all_nodes, mask, edge_attr_dict):
-
         for layer in self.layers:
             all_nodes = layer(all_nodes, mask, edge_attr_dict)
 
         return all_nodes
-
-
-class SubConnection(nn.Module):
-    def __init__(self, args):
-        super(SubConnection, self).__init__()
-
-        self.out_feature = args.hidden_channels
-        self.norm = nn.BatchNorm1d(self.out_feature)
-        self.dropout = nn.Dropout(args.dropout)
-        self.sublayer = TRMGATLayer(args.hidden_channels, args.qk_dim, 3, args.dropout)
-
-    def forward(self, all_nodes, mask, edge_attr_dict):
-        return self.norm(all_nodes + self.dropout(self.sublayer(all_nodes, mask, edge_attr_dict)))
 
 
 class FFN(nn.Module):
@@ -49,7 +37,7 @@ class FFN(nn.Module):
         )
 
     def forward(self, x):
-        return self.reduction(F.normalize(x, 2, 1))
+        return self.reduction(F.normalize(x, 2, 0))
 
 
 class UnnamedModel(nn.Module):
@@ -57,17 +45,14 @@ class UnnamedModel(nn.Module):
         super().__init__()
 
         # node to uniform dim
-        self.drug_fc = nn.Linear(args.drug_features_num, args.hidden_channels)
-        self.target_fc = nn.Linear(args.target_features_num, args.hidden_channels)
+        self.fc_drug = nn.Linear(args.drug_features_num, args.hidden_channels)
+        self.fc_target = nn.Linear(args.target_features_num, args.hidden_channels)
 
-        # gnn
+        self.fc_cell = FFN(args.cell_features_num, args.hidden_channels * 2, args)
+
         self.gnn = GNN(args)
 
-        # get cell features
-        self.ffn1 = FFN(args.cell_features_num, args.hidden_channels * 2, args)
-
-        # final transform
-        self.ffn2 = FFN(args.hidden_channels * 4, args.hidden_channels, args)
+        self.ffn = FFN(args.hidden_channels * 4, args.hidden_channels, args)
 
         # output layer
         self.classfier = nn.Linear(args.hidden_channels, 2)
@@ -76,29 +61,30 @@ class UnnamedModel(nn.Module):
             self.mask_target = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.target_features_num)).float())
             self.mask_drug = nn.Parameter(nn.init.xavier_uniform_(torch.empty(1, args.drug_features_num)).float())
 
-    def forward(self, drug1_id, drug2_id, cell_features, x_dict, mask, edge_attr_dict):
-        drug = x_dict['drug']
-        target = x_dict['target']
-        # To unified dim
-        _drug = self.drug_fc(drug)
-        _target = self.target_fc(target)
-        all_nodes = torch.concat((_drug, _target), 0)
+    def forward(self, drug1_id, drug2_id, cell_features, graph_data):
+        drug = graph_data.node_dict['drug']
+        target = graph_data.node_dict['target']
 
-        # Get drug graph representation
-        _all_nodes = self.gnn(all_nodes, mask, edge_attr_dict)
-        _x_dict = {'drug': _all_nodes[:drug.shape[0]], 'target': _all_nodes[drug.shape[0]:]}
-        drug1 = _all_nodes[drug1_id]
-        drug2 = _all_nodes[drug2_id]
+        # 统一drug、target维度
+        h_drug = self.fc_drug(drug)
+        h_target = self.fc_target(target)
+        all_nodes = torch.concat((h_drug, h_target), 0)
 
-        # Get cell representation
-        cell = self.ffn1(cell_features)
+        # 图神经网络更新节点表示
+        _h_nodes = self.gnn(all_nodes,graph_data.mask,graph_data.edge_attr_dict)
+        _x_dict = {'drug': _h_nodes[:drug.shape[0]], 'target': _h_nodes[drug.shape[0]:]}
 
-        # Combine
-        hidden = torch.cat((drug1, drug2, cell), -1)
-        hidden = self.ffn2(hidden)
+        # 得到两个药物表示
+        h_drug1 = _x_dict['drug'][drug1_id]
+        h_drug2 = _x_dict['drug'][drug2_id]
+
+        # 得到细胞系表示
+        h_cell = self.fc_cell(cell_features)
+
+        hidden = torch.cat((h_drug1, h_drug2, h_cell), -1)
+        hidden = self.ffn(hidden)
 
         output = self.classfier(hidden)
-
         return output, _x_dict
 
     def get_mask(self):

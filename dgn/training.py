@@ -16,6 +16,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 
 from data.dataset import GNNDataset
+from data.graph import GraphData
 from data.pipeline import GraphPipeline
 from models.model import UnnamedModel
 from utils.ema import initializes_target_network, update_target_network_parameters
@@ -66,7 +67,7 @@ def get_args(args):
 
     parser.add_argument("--num_layers", type=int, default=1, help="gnn layer num")
     parser.add_argument("--hidden_channels", type=int, default=768, help="hidden channels in model")
-    parser.add_argument("--qk_dim",type=int,default=768,help="qk dim")
+    parser.add_argument("--qk_dim", type=int, default=768, help="qk dim")
     parser.add_argument("--dropout", type=float, default=0.2, help="dropout weight")
     parser.add_argument("--project1", type=int, default=2048, help="hidden channels in reduction 1st Linear")
     parser.add_argument("--project2", type=int, default=512, help="hidden channels in reduction 2nd Linear")
@@ -122,11 +123,7 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
 
         optimizer.zero_grad()
 
-        x_dict = graph_data.node_dict
-        mask = graph_data.mask
-        edge_attr_dict = graph_data.edge_attr_dict
-
-        loss, loss_print = get_loss(args, cell_features, drug1_ids, drug2_ids, mask, labels, loss_fn, online_model, target_model, x_dict, edge_attr_dict)
+        loss, loss_print = get_loss(args, cell_features, drug1_ids, drug2_ids, labels, loss_fn, online_model, target_model, graph_data)
 
         accelerator.backward(loss)
 
@@ -144,7 +141,7 @@ def train(device, graph_data, loader_train, loss_fn, online_model, optimizer, ep
                 datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch + 1, args.epochs, batch_idx + 1, len(loader_train)) + loss_print)
 
 
-def get_loss(args, cell_features, drug1_ids, drug2_ids, mask, labels, loss_fn, online_model, target_model, x_dict, edge_attr_dict):
+def get_loss(args, cell_features, drug1_ids, drug2_ids, labels, loss_fn, online_model, target_model, graph_data):
     """
     need update args.multi_model_settings
     """
@@ -152,16 +149,17 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, mask, labels, loss_fn, o
     loss = torch.inf
     # single model
     if args.setting == 1:
-        output, _ = online_model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
+        output, _ = online_model(drug1_ids, drug2_ids, cell_features, graph_data)
         loss = loss_fn(output, labels)
         loss_print = "loss={:.6f}".format(loss.item())
     # MAE + EMA
     elif args.setting == 2:
         mask_drug, mask_target = online_model.get_mask()
-        _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
+        _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(graph_data.node_dict, mask_drug, mask_target, ratio=args.mask_ratio)
+        _graph_data = GraphData(_x_dict, graph_data.adj_dict, graph_data.edge_attr_dict, graph_data.mask)
 
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, mask, edge_attr_dict)
-        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _graph_data)
+        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, graph_data)
         loss0 = loss_fn(_output, labels)
 
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
@@ -171,10 +169,12 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, mask, labels, loss_fn, o
     # MAE + EMA + KL
     elif args.setting == 3:
         mask_drug, mask_target = online_model.get_mask()
-        _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, mask, edge_attr_dict)
-        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
-        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
+        _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(graph_data.node_dict, mask_drug, mask_target, ratio=args.mask_ratio)
+        _graph_data = GraphData(_x_dict, graph_data.adj_dict, graph_data.edge_attr_dict, graph_data.mask)
+
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _graph_data)
+        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, graph_data)
+        output, x_dict = target_model(drug1_ids, drug2_ids, cell_features, graph_data)
         loss0 = loss_fn(_output, labels)
         loss1 = loss_fn(output1, labels)
         loss_mae = get_mae_loss(x_dict, _x_dict, drug_mask_index, target_mask_index)
@@ -186,9 +186,11 @@ def get_loss(args, cell_features, drug1_ids, drug2_ids, mask, labels, loss_fn, o
     # Single Net KL
     elif args.setting == 4:
         mask_drug, mask_target = online_model.get_mask()
-        _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(x_dict, mask_drug, mask_target, ratio=args.mask_ratio)
-        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _x_dict, mask, edge_attr_dict)
-        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, x_dict, mask, edge_attr_dict)
+        _x_dict, drug_mask_index, target_mask_index = get_mask_x_dict(graph_data.node_dict, mask_drug, mask_target, ratio=args.mask_ratio)
+        _graph_data = GraphData(_x_dict, graph_data.adj_dict, graph_data.edge_attr_dict, graph_data.mask)
+
+        _output, _x_dict = online_model(drug1_ids, drug2_ids, cell_features, _graph_data)
+        output1, x_dict1 = online_model(drug1_ids, drug2_ids, cell_features, graph_data)
         loss0 = loss_fn(_output, labels)
         loss1 = loss_fn(output1, labels)
 

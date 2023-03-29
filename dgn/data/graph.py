@@ -103,7 +103,7 @@ def preprocess_features(features):
 
 
 class GraphData:
-    def __init__(self, node_dict, adj_dict, edge_attr_dict, mask):
+    def __init__(self, node_dict, adj_dict, edge_attr_dict=None, mask=None):
         self._node_dict = node_dict
         self._adj_dict = adj_dict
         self._edge_attr_dict = edge_attr_dict
@@ -124,3 +124,9 @@ class GraphData:
     @property
     def mask(self):
         return self._mask
+
+    def get_all_nodes(self):
+        drug = self._node_dict['drug']
+        target = self._node_dict['target']
+        all_nodes = torch.concat((drug, target), 0)
+        return all_nodes
