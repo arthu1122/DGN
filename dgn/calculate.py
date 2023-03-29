@@ -104,7 +104,7 @@ with open(args.o, 'a', newline='') as f:
     config = get_config(args)
     for i in range(6):
         if i != 5:
-            writer.writerow([args.f, config, i + 1, AUC_dev[i], PR_AUC[i], ACC[i], BACC[i], PREC[i], TPR[i], KAPPA[i]])
+            writer.writerow([args.f,  i + 1, AUC_dev[i], PR_AUC[i], ACC[i], BACC[i], PREC[i], TPR[i], KAPPA[i],config])
         else:
-            writer.writerow([args.f, config, "AVG", AUC_dev[i], PR_AUC[i], ACC[i], BACC[i], PREC[i], TPR[i], KAPPA[i]])
+            writer.writerow([args.f,  "AVG", AUC_dev[i], PR_AUC[i], ACC[i], BACC[i], PREC[i], TPR[i], KAPPA[i],config])
     writer.writerow([])
